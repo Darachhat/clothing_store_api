@@ -595,6 +595,7 @@ async def seed() -> None:
                 {"name": role_name},
                 {"is_system": True, "description": f"System {role_name} role"},
             )
+            await db.refresh(role, ["permissions"])
             role.permissions = [perm_map[code] for code in perm_codes if code in perm_map]
             role_map[role_name] = role
         await db.flush()
@@ -614,6 +615,7 @@ async def seed() -> None:
                 "employee_code": "EMP-001",
             },
         )
+        await db.refresh(admin, ["roles"])
         admin.roles = [role_map["ADMIN"]]
 
         manager, _ = await get_or_create(
@@ -629,6 +631,7 @@ async def seed() -> None:
                 "employee_code": "EMP-002",
             },
         )
+        await db.refresh(manager, ["roles"])
         manager.roles = [role_map["MANAGER"]]
 
         cashier, _ = await get_or_create(
@@ -644,6 +647,7 @@ async def seed() -> None:
                 "employee_code": "EMP-003",
             },
         )
+        await db.refresh(cashier, ["roles"])
         cashier.roles = [role_map["CASHIER"]]
         await db.flush()
         logger.info("✅ Seed user credentials verified (admin / manager / cashier)")

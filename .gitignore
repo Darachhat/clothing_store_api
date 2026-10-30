@@ -25,3 +25,4 @@ celerybeat-schedule*
 .idea/
 .vscode/
 .DS_Store
+

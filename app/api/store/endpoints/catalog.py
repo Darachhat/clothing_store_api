@@ -30,7 +30,7 @@ async def list_public_products(
 ) -> dict:
     """List active products for the public storefront."""
     repo = ProductRepository(db)
-    products, total = await repo.list_products(
+    products, total = await repo.search_paginated(
         page=page,
         page_size=page_size,
         search=search,
