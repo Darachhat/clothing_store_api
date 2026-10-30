@@ -1,0 +1,1 @@
+"""Store lane endpoints package."""
