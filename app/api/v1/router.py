@@ -6,26 +6,25 @@ from app.api.v1.handlers.system_handler import router as system_router
 from app.api.v1.handlers.telegram_handler import router as telegram_router
 from app.api.v1.handlers.log_handler import router as log_router
 from app.api.v1.handlers.product_handler import router as products_router, variant_router
-
-from app.api.v1.endpoints.attachments import router as attachments_router
-from app.api.v1.endpoints.branches import router as branches_router
-from app.api.v1.endpoints.catalog import (
+from app.api.v1.handlers.attachment_handler import router as attachments_router
+from app.api.v1.handlers.branch_handler import router as branches_router
+from app.api.v1.handlers.catalog_handler import (
     brands_router
     , categories_router
     , colors_router
     , sizes_router
     , suppliers_router
 )
-from app.api.v1.endpoints.customers import router as customers_router
-from app.api.v1.endpoints.expenses import router as expenses_router
-from app.api.v1.endpoints.inventory import router as inventory_router, transfers_router
-from app.api.v1.endpoints.labels import router as labels_router
-from app.api.v1.endpoints.promotions import router as promotions_router
-from app.api.v1.endpoints.purchases import router as purchases_router
-from app.api.v1.endpoints.reports import router as reports_router
-from app.api.v1.endpoints.sales import returns_router, router as sales_router
-from app.api.v1.endpoints.scanner import router as scanner_router
-from app.api.v1.endpoints.users import roles_router, users_router
+from app.api.v1.handlers.customer_handler import router as customers_router
+from app.api.v1.handlers.expense_handler import router as expenses_router
+from app.api.v1.handlers.inventory_handler import router as inventory_router, transfers_router
+from app.api.v1.handlers.label_handler import router as labels_router
+from app.api.v1.handlers.promotion_handler import router as promotions_router
+from app.api.v1.handlers.purchase_handler import router as purchases_router
+from app.api.v1.handlers.report_handler import router as reports_router
+from app.api.v1.handlers.sale_handler import returns_router, router as sales_router
+from app.api.v1.handlers.scanner_handler import router as scanner_router
+from app.api.v1.handlers.user_handler import roles_router, users_router
 
 router = APIRouter()
 
@@ -59,4 +58,3 @@ router.include_router(promotions_router)
 router.include_router(users_router)
 router.include_router(roles_router)
 router.include_router(branches_router)
-
