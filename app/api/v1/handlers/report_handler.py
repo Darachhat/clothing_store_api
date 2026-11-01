@@ -4,18 +4,18 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, func, select
+from fastapi import APIRouter, Depends, Query, Response
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import require_permission
-from app.models.inventory import InventoryMovement, InventoryStock
-from app.models.misc import Expense
-from app.models.product import Product, ProductVariant
-from app.models.purchase import GoodsReceiptItem, PurchaseItem, PurchaseOrder
-from app.models.sale import Return, Sale, SaleItem
-from app.models.user import User
+from app.models import InventoryMovement, InventoryStock
+from app.models import Expense
+from app.models import Product, ProductVariant
+from app.models import GoodsReceiptItem, PurchaseItem, PurchaseOrder
+from app.models import Return, Sale, SaleItem
+from app.models import User
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -133,6 +133,77 @@ async def dashboard(
     }
 
 
+@router.get("/warehouse-dashboard")
+async def warehouse_dashboard(
+    period: str = Query("today", pattern="^(today|yesterday|7days|last_7_days|30days|last_30_days|this_month)$"),
+    warehouse_id: UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("inventory.read")),
+) -> dict:
+    """Warehouse-facing KPIs. Contains no revenue/profit data, so it only needs inventory.read."""
+    from app.models import StockTransfer
+
+    now = datetime.now(UTC)
+    today = now.date()
+    midnight = datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
+    if period == "today":
+        start, end = midnight, now
+    elif period == "yesterday":
+        start = midnight - timedelta(days=1)
+        end = midnight - timedelta(microseconds=1)
+    elif period in ("7days", "last_7_days"):
+        start, end = midnight - timedelta(days=7), now
+    elif period in ("30days", "last_30_days"):
+        start, end = now - timedelta(days=30), now
+    else:  # this_month
+        start, end = datetime.combine(today.replace(day=1), datetime.min.time()).replace(tzinfo=UTC), now
+
+    stock_filter = []
+    move_filter = [InventoryMovement.created_at >= start, InventoryMovement.created_at <= end]
+    if warehouse_id:
+        stock_filter.append(InventoryStock.warehouse_id == warehouse_id)
+        move_filter.append(InventoryMovement.warehouse_id == warehouse_id)
+
+    stock_row = (
+        await db.execute(
+            select(
+                func.count(InventoryStock.id),
+                func.coalesce(func.sum(InventoryStock.quantity), 0),
+                func.coalesce(
+                    func.sum(case((InventoryStock.quantity <= InventoryStock.reorder_level, 1), else_=0)), 0
+                ),
+                func.coalesce(func.sum(case((InventoryStock.quantity == 0, 1), else_=0)), 0),
+            ).where(*stock_filter)
+        )
+    ).one()
+
+    move_row = (
+        await db.execute(
+            select(
+                func.coalesce(func.sum(case((InventoryMovement.quantity > 0, InventoryMovement.quantity), else_=0)), 0),
+                func.coalesce(func.sum(case((InventoryMovement.quantity < 0, -InventoryMovement.quantity), else_=0)), 0),
+            ).where(*move_filter)
+        )
+    ).one()
+
+    open_transfers = (
+        await db.execute(
+            select(func.count(StockTransfer.id)).where(StockTransfer.status.in_(("PENDING", "IN_TRANSIT")))
+        )
+    ).scalar_one()
+
+    return {
+        "period": period,
+        "total_sku_count": int(stock_row[0]),
+        "total_units": int(stock_row[1]),
+        "low_stock_count": int(stock_row[2]),
+        "out_of_stock_count": int(stock_row[3]),
+        "units_in": int(move_row[0]),
+        "units_out": int(move_row[1]),
+        "open_transfers": int(open_transfers),
+    }
+
+
 @router.get("/sales")
 async def sales_report(
     start_date: date | None = Query(None),
@@ -202,7 +273,44 @@ async def sales_report(
     }
 
 
+@router.get("/sales/export-csv")
+async def export_sales_report_csv(
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+    group_by: str = Query("day", pattern="^(day|week|month)$"),
+    branch_id: UUID | None = None,
+    cashier_id: UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("report.read")),
+) -> Response:
+    data = await sales_report(
+        start_date=start_date,
+        end_date=end_date,
+        from_date=from_date,
+        to_date=to_date,
+        group_by=group_by,
+        branch_id=branch_id,
+        cashier_id=cashier_id,
+        db=db,
+        _=current_user,
+    )
+    lines = ["Period,Transactions,Items Sold,Revenue,Discounts"]
+    for row in data.get("rows", []):
+        lines.append(
+            f"{row.get('period','')},{row.get('transaction_count',0)},{row.get('items_sold',0)},{row.get('revenue',0)},{row.get('discount_total',0)}"
+        )
+    csv_content = "\n".join(lines)
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=sales-report.csv"},
+    )
+
+
 @router.get("/profit")
+@router.get("/profit-loss")
 async def profit_report(
     start_date: date | None = Query(None),
     end_date: date | None = Query(None),
@@ -425,5 +533,59 @@ async def purchases_report(
         "total_tax": round(total_tax, 2),
         "total_items_received": int(total_received),
         "orders_by_status": status_counts,
+        "rows": list(buckets.values()),
+    }
+
+
+@router.get("/expenses")
+async def expenses_report(
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+    from_date: date | None = Query(None),
+    to_date: date | None = Query(None),
+    group_by: str = Query("day", pattern="^(day|week|month)$"),
+    branch_id: UUID | None = None,
+    category_id: UUID | None = None,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("report.read")),
+) -> dict:
+    """Expenses report: breakdown by period and category."""
+    from sqlalchemy.orm import selectinload
+
+    s_date, e_date, _, _ = _resolve_date_range(start_date, end_date, from_date, to_date)
+
+    stmt = (
+        select(Expense)
+        .options(selectinload(Expense.category))
+        .where(and_(Expense.expense_date >= s_date, Expense.expense_date <= e_date))
+        .order_by(Expense.expense_date.asc())
+    )
+    if branch_id:
+        stmt = stmt.where(Expense.branch_id == branch_id)
+    if category_id:
+        stmt = stmt.where(Expense.category_id == category_id)
+
+    expenses = list((await db.execute(stmt)).scalars().all())
+    approved = [e for e in expenses if e.status == "APPROVED"]
+    total_approved = sum(float(e.amount) for e in approved)
+    total_pending = sum(float(e.amount) for e in expenses if e.status == "PENDING")
+
+    by_category: dict[str, float] = {}
+    buckets: dict[str, dict] = {}
+    for e in approved:
+        cat_name = e.category.name if e.category else "Uncategorized"
+        by_category[cat_name] = round(by_category.get(cat_name, 0.0) + float(e.amount), 2)
+        key = _period_key(e.expense_date, group_by)
+        b = buckets.setdefault(key, {"period": key, "expense_count": 0, "total_amount": 0.0})
+        b["expense_count"] += 1
+        b["total_amount"] = round(b["total_amount"] + float(e.amount), 2)
+
+    return {
+        "start_date": str(s_date),
+        "end_date": str(e_date),
+        "total_approved": round(total_approved, 2),
+        "total_pending": round(total_pending, 2),
+        "expense_count": len(approved),
+        "by_category": by_category,
         "rows": list(buckets.values()),
     }

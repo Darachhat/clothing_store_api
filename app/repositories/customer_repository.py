@@ -8,7 +8,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.customer import Customer, LoyaltyAccount
+from app.models import Customer, LoyaltyAccount
 from app.repositories.base import BaseRepository
 
 

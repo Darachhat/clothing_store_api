@@ -8,22 +8,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_active_user, require_permission
-from app.models.misc import Promotion
-from app.models.user import User
+from app.models import Promotion
+from app.models import User
 from app.repositories.misc_repository import PromotionRepository
-from app.schemas.promotion import (
-    CouponValidationRequest,
-    CouponValidationResponse,
-    PromotionCreate,
-    PromotionOut,
-    PromotionUpdate,
+from app.schemas.promotion_schema import (
+    COUPON_VALIDATION_REQUEST_SCHEMA,
+    COUPON_VALIDATION_RESPONSE_SCHEMA,
+    PROMOTION_CREATE_SCHEMA,
+    PROMOTION_RESPONSE_SCHEMA,
+    PROMOTION_UPDATE_SCHEMA,
 )
 from app.services.misc_service import PromotionService
 
 router = APIRouter(prefix="/promotions", tags=["Promotions & Discounts"])
 
 
-@router.get("", response_model=list[PromotionOut])
+@router.get("", response_model=list[PROMOTION_RESPONSE_SCHEMA])
 async def list_promotions(
     active_only: bool = False,
     promo_status: str | None = Query(None, alias="status"),
@@ -42,9 +42,9 @@ async def list_promotions(
     return list(items)
 
 
-@router.post("", response_model=PromotionOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PROMOTION_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_promotion(
-    payload: PromotionCreate,
+    payload: PROMOTION_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.create")),
 ) -> Promotion:
@@ -63,7 +63,7 @@ async def create_promotion(
     return promo
 
 
-@router.get("/{promo_id}", response_model=PromotionOut)
+@router.get("/{promo_id}", response_model=PROMOTION_RESPONSE_SCHEMA)
 async def get_promotion(
     promo_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -76,11 +76,11 @@ async def get_promotion(
     return promo
 
 
-@router.patch("/{promo_id}", response_model=PromotionOut)
-@router.put("/{promo_id}", response_model=PromotionOut)
+@router.patch("/{promo_id}", response_model=PROMOTION_RESPONSE_SCHEMA)
+@router.put("/{promo_id}", response_model=PROMOTION_RESPONSE_SCHEMA)
 async def update_promotion(
     promo_id: UUID,
-    payload: PromotionUpdate,
+    payload: PROMOTION_UPDATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.update")),
 ) -> Promotion:
@@ -114,12 +114,12 @@ async def delete_promotion(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/validate", response_model=CouponValidationResponse)
-@router.post("/validate-coupon", response_model=CouponValidationResponse, include_in_schema=False)
+@router.post("/validate", response_model=COUPON_VALIDATION_RESPONSE_SCHEMA)
+@router.post("/validate-coupon", response_model=COUPON_VALIDATION_RESPONSE_SCHEMA, include_in_schema=False)
 async def validate_coupon(
-    payload: CouponValidationRequest,
+    payload: COUPON_VALIDATION_REQUEST_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_active_user),
-) -> CouponValidationResponse:
+) -> COUPON_VALIDATION_RESPONSE_SCHEMA:
     service = PromotionService(db)
     return await service.validate_coupon(code=payload.code, cart_total=payload.cart_total)

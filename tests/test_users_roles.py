@@ -6,7 +6,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, hash_password
-from app.models.user import Permission, Role, User
+from app.models import Permission, Role, User
 
 
 async def create_admin_user(db: AsyncSession) -> User:

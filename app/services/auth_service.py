@@ -18,8 +18,8 @@ from app.core.security import (
     , verify_password
 )
 from app.core.utils.crypto_utils import generate_api_key, hash_api_key
-from app.models.auth_model import SYSTEM_CLIENT_MODEL
-from app.models.user import RefreshToken, User
+from app.models import SYSTEM_CLIENT_MODEL
+from app.models import RefreshToken, User
 from app.repositories.user_repository import RefreshTokenRepository, UserRepository
 from app.schemas.auth_schema import (
     SYSTEM_CLIENT_CREATE_SCHEMA

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.exceptions import CONFLICT_EXCEPTION, NOT_FOUND_EXCEPTION
 from app.core.utils.telegram_utils import TELEGRAM_UTILS
-from app.models.auth_model import TELEGRAM_BOT_MODEL, TELEGRAM_CHAT_MODEL
+from app.models import TELEGRAM_BOT_MODEL, TELEGRAM_CHAT_MODEL
 from app.schemas.base_schema import STATS_SUMMARY_SCHEMA
 from app.schemas.telegram_schema import (
     TELEGRAM_BOT_CREATE_SCHEMA

@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
-from app.models.product import Brand, Category, Color, Product, ProductVariant, Size, Supplier
+from app.models import Brand, Category, Color, Product, ProductVariant, Size, Supplier
 from app.repositories.base import BaseRepository
 
 

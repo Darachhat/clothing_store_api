@@ -7,18 +7,19 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.deps import require_permission
-from app.models.user import User
-from app.schemas.product import (
-    ProductCreate
-    , ProductOut
-    , ProductPaginationResponse
-    , ProductPaginationWithVariantsResponse
-    , ProductUpdate
-    , ProductVariantCreate
-    , ProductVariantOut
-    , ProductVariantUpdate
-    , ProductWithVariants
+from app.core.deps import get_current_active_user, require_permission
+from app.models import User
+from app.schemas.product_schema import (
+    PRODUCT_CREATE_SCHEMA
+    , PRODUCT_RESPONSE_SCHEMA
+    , PRODUCT_PAGINATION_RESPONSE_SCHEMA
+    , PRODUCT_PAGINATION_WITH_VARIANTS_RESPONSE_SCHEMA
+    , PRODUCT_UPDATE_SCHEMA
+    , PRODUCT_VARIANT_CREATE_SCHEMA
+    , PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA
+    , PRODUCT_VARIANT_RESPONSE_SCHEMA
+    , PRODUCT_VARIANT_UPDATE_SCHEMA
+    , PRODUCT_WITH_VARIANTS_SCHEMA
 )
 from app.services.product_service import PRODUCT_SERVICE
 from app.utils.qr import generate_barcode_png, generate_barcode_svg, generate_qr_png, generate_qr_svg
@@ -51,7 +52,7 @@ async def list_products(
     , limit            : int | None  = Query(None, le=200)
     , db               : AsyncSession = Depends(get_db)
     , _                : User         = Depends(require_permission("product.read"))
-) -> ProductPaginationResponse | ProductPaginationWithVariantsResponse:
+) -> PRODUCT_PAGINATION_RESPONSE_SCHEMA | PRODUCT_PAGINATION_WITH_VARIANTS_RESPONSE_SCHEMA:
     raw_params = {
         "page"               : page
         , "page_size"        : page_size
@@ -77,42 +78,54 @@ async def list_products(
     return data
 
 
-@router.post("/", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=PRODUCT_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_product(
-    body           : ProductCreate
+    body           : PRODUCT_CREATE_SCHEMA
     , db           : AsyncSession = Depends(get_db)
     , current_user : User         = Depends(require_permission("product.create"))
-) -> ProductOut:
+) -> PRODUCT_RESPONSE_SCHEMA:
     return await PRODUCT_SERVICE.create_product(db=db, body=body)
 
 
-@router.get("/{id}", response_model=ProductWithVariants)
+@router.get("/{id}", response_model=PRODUCT_WITH_VARIANTS_SCHEMA)
 async def get_product(
     id   : UUID
     , db : AsyncSession = Depends(get_db)
     , _  : User         = Depends(require_permission("product.read"))
-) -> ProductWithVariants:
+) -> PRODUCT_WITH_VARIANTS_SCHEMA:
     return await PRODUCT_SERVICE.get_product(db=db, product_id=id)
 
 
-@router.put("/{id}", response_model=ProductOut)
-@router.patch("/{id}", response_model=ProductOut)
+@router.put("/{id}", response_model=PRODUCT_RESPONSE_SCHEMA)
+@router.patch("/{id}", response_model=PRODUCT_RESPONSE_SCHEMA)
 async def update_product(
     id     : UUID
-    , body : ProductUpdate
+    , body : PRODUCT_UPDATE_SCHEMA
     , db   : AsyncSession = Depends(get_db)
     , _    : User         = Depends(require_permission("product.update"))
-) -> ProductOut:
+) -> PRODUCT_RESPONSE_SCHEMA:
     return await PRODUCT_SERVICE.update_product(db=db, product_id=id, body=body)
 
 
-@router.get("/{id}/variants", response_model=list[ProductVariantOut])
+@router.get("/{id}/variants", response_model=list[PRODUCT_VARIANT_RESPONSE_SCHEMA])
 async def get_product_variants(
     id   : UUID
     , db : AsyncSession = Depends(get_db)
     , _  : User         = Depends(require_permission("product.read"))
-) -> list[ProductVariantOut]:
+) -> list[PRODUCT_VARIANT_RESPONSE_SCHEMA]:
     return await PRODUCT_SERVICE.list_variants(db=db, product_id=id, limit=500)
+
+
+@router.post("/{id}/variants", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
+async def create_product_variant_for_product(
+    id     : UUID
+    , body : PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA
+    , db   : AsyncSession = Depends(get_db)
+    , _    : User         = Depends(require_permission("product.create"))
+) -> PRODUCT_VARIANT_RESPONSE_SCHEMA:
+    payload = body.model_dump()
+    payload["product_id"] = id
+    return await PRODUCT_SERVICE.create_variant(db=db, body=PRODUCT_VARIANT_CREATE_SCHEMA(**payload))
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
@@ -126,7 +139,7 @@ async def delete_product(
 
 
 # ─── Product Variants ─────────────────────────────────────────────────────────
-@variant_router.get("/", response_model=list[ProductVariantOut])
+@variant_router.get("/", response_model=list[PRODUCT_VARIANT_RESPONSE_SCHEMA])
 async def list_variants(
     q            : str | None   = Query(None)
     , product_id : UUID | None  = None
@@ -136,7 +149,7 @@ async def list_variants(
     , limit      : int          = Query(50, le=500)
     , db         : AsyncSession = Depends(get_db)
     , _          : User         = Depends(require_permission("product.read"))
-) -> list[ProductVariantOut]:
+) -> list[PRODUCT_VARIANT_RESPONSE_SCHEMA]:
     return await PRODUCT_SERVICE.list_variants(
         db           = db
         , q          = q
@@ -148,12 +161,12 @@ async def list_variants(
     )
 
 
-@variant_router.post("/", response_model=ProductVariantOut, status_code=status.HTTP_201_CREATED)
+@variant_router.post("/", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_variant(
-    body : ProductVariantCreate
+    body : PRODUCT_VARIANT_CREATE_SCHEMA
     , db : AsyncSession = Depends(get_db)
     , _  : User         = Depends(require_permission("product.create"))
-) -> ProductVariantOut:
+) -> PRODUCT_VARIANT_RESPONSE_SCHEMA:
     return await PRODUCT_SERVICE.create_variant(db=db, body=body)
 
 
@@ -167,36 +180,51 @@ async def delete_variant(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@variant_router.get("/by-qr/{reference}", response_model=ProductVariantOut)
+@variant_router.get("/by-qr/{reference}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA)
+@variant_router.get("/qr/{reference}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA, include_in_schema=False)
 async def get_variant_by_qr(
     reference : str
     , db      : AsyncSession = Depends(get_db)
-) -> ProductVariantOut:
+    , _       : User         = Depends(get_current_active_user)
+) -> PRODUCT_VARIANT_RESPONSE_SCHEMA:
     return await PRODUCT_SERVICE.get_variant_by_qr(db=db, reference=reference)
 
 
-@variant_router.get("/by-barcode/{barcode}", response_model=ProductVariantOut)
+@variant_router.get("/by-barcode/{barcode}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA)
+@variant_router.get("/barcode/{barcode}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA, include_in_schema=False)
 async def get_variant_by_barcode(
     barcode : str
     , db    : AsyncSession = Depends(get_db)
-) -> ProductVariantOut:
+    , _     : User         = Depends(get_current_active_user)
+) -> PRODUCT_VARIANT_RESPONSE_SCHEMA:
     return await PRODUCT_SERVICE.get_variant_by_barcode(db=db, barcode=barcode)
 
 
-@variant_router.get("/by-sku/{sku}", response_model=ProductVariantOut)
+@variant_router.get("/by-sku/{sku}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA)
+@variant_router.get("/sku/{sku}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA, include_in_schema=False)
 async def get_variant_by_sku(
     sku  : str
     , db : AsyncSession = Depends(get_db)
-) -> ProductVariantOut:
+    , _  : User         = Depends(get_current_active_user)
+) -> PRODUCT_VARIANT_RESPONSE_SCHEMA:
     return await PRODUCT_SERVICE.get_variant_by_sku(db=db, sku=sku)
 
 
-@variant_router.get("/{id}", response_model=ProductVariantOut)
+@variant_router.post("/{id}/regenerate-codes", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA)
+async def regenerate_variant_codes(
+    id   : UUID
+    , db : AsyncSession = Depends(get_db)
+    , _  : User         = Depends(require_permission("product.update"))
+) -> PRODUCT_VARIANT_RESPONSE_SCHEMA:
+    return await PRODUCT_SERVICE.regenerate_variant_codes(db=db, variant_id=id)
+
+
+@variant_router.get("/{id}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA)
 async def get_variant(
     id   : UUID
     , db : AsyncSession = Depends(get_db)
     , _  : User         = Depends(require_permission("product.read"))
-) -> ProductVariantOut:
+) -> PRODUCT_VARIANT_RESPONSE_SCHEMA:
     return await PRODUCT_SERVICE.get_variant(db=db, variant_id=id)
 
 
@@ -232,13 +260,13 @@ async def get_variant_barcode(
         return Response(content=content, media_type="image/png")
 
 
-@variant_router.put("/{id}", response_model=ProductVariantOut)
-@variant_router.patch("/{id}", response_model=ProductVariantOut)
+@variant_router.put("/{id}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA)
+@variant_router.patch("/{id}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA)
 async def update_variant(
     id     : UUID
-    , body : ProductVariantUpdate
+    , body : PRODUCT_VARIANT_UPDATE_SCHEMA
     , db   : AsyncSession = Depends(get_db)
     , _    : User         = Depends(require_permission("product.update"))
-) -> ProductVariantOut:
+) -> PRODUCT_VARIANT_RESPONSE_SCHEMA:
     return await PRODUCT_SERVICE.update_variant(db=db, variant_id=id, body=body)
 

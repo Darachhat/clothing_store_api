@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.payment import PaymentTransaction
+from app.models import PaymentTransaction
 from app.services.payment_service import PaymentService
 
 router = APIRouter(prefix="/api/payments/aba", tags=["ABA PayWay Callback"])

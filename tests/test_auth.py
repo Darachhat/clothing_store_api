@@ -6,8 +6,8 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
-from app.models.branch import Branch, Warehouse
-from app.models.user import Role, User
+from app.models import Branch, Warehouse
+from app.models import Role, User
 
 
 async def create_test_user(db: AsyncSession) -> User:

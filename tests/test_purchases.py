@@ -7,15 +7,15 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
-from app.models.branch import Branch, Warehouse
-from app.models.product import Brand, Category, Color, Product, ProductVariant, Size, Supplier
-from app.models.user import Role, User
+from app.models import Branch, Warehouse
+from app.models import Brand, Category, Color, Product, ProductVariant, Size, Supplier
+from app.models import Role, User
 from app.repositories.inventory_repository import InventoryStockRepository
-from app.schemas.purchase import (
-    GoodsReceiptCreate,
-    GoodsReceiptItemCreate,
-    PurchaseItemCreate,
-    PurchaseOrderCreate,
+from app.schemas.purchase_schema import (
+    GOODS_RECEIPT_CREATE_SCHEMA,
+    GOODS_RECEIPT_ITEM_CREATE_SCHEMA,
+    PURCHASE_ITEM_CREATE_SCHEMA,
+    PURCHASE_ORDER_CREATE_SCHEMA,
 )
 from app.services.purchase_service import PurchaseService
 
@@ -95,14 +95,14 @@ async def test_purchase_order_lifecycle_and_goods_receipt(db: AsyncSession):
     stock_repo = InventoryStockRepository(db)
 
     # 1. Create Purchase Order
-    po_in = PurchaseOrderCreate(
+    po_in = PURCHASE_ORDER_CREATE_SCHEMA(
         supplier_id=infra["supplier"].id,
         branch_id=infra["branch"].id,
         warehouse_id=infra["warehouse"].id,
         notes="First order test",
         tax_amount=Decimal("5.00"),
         items=[
-            PurchaseItemCreate(
+            PURCHASE_ITEM_CREATE_SCHEMA(
                 variant_id=infra["variant"].id,
                 quantity_ordered=20,
                 unit_cost=Decimal("12.00"),
@@ -124,11 +124,11 @@ async def test_purchase_order_lifecycle_and_goods_receipt(db: AsyncSession):
 
     # 3. Partial Goods Receipt (receive 8 units)
     po_item = po.items[0]
-    gr_in_1 = GoodsReceiptCreate(
+    gr_in_1 = GOODS_RECEIPT_CREATE_SCHEMA(
         purchase_order_id=po.id,
         notes="Partial delivery received",
         items=[
-            GoodsReceiptItemCreate(
+            GOODS_RECEIPT_ITEM_CREATE_SCHEMA(
                 purchase_item_id=po_item.id,
                 variant_id=infra["variant"].id,
                 quantity_received=8,
@@ -152,11 +152,11 @@ async def test_purchase_order_lifecycle_and_goods_receipt(db: AsyncSession):
     assert updated_po.items[0].quantity_received == 8
 
     # 4. Final Goods Receipt (receive remaining 12 units)
-    gr_in_2 = GoodsReceiptCreate(
+    gr_in_2 = GOODS_RECEIPT_CREATE_SCHEMA(
         purchase_order_id=po.id,
         notes="Remaining delivery received",
         items=[
-            GoodsReceiptItemCreate(
+            GOODS_RECEIPT_ITEM_CREATE_SCHEMA(
                 purchase_item_id=po_item.id,
                 variant_id=infra["variant"].id,
                 quantity_received=12,

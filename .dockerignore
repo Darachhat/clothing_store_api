@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.git/
+.gitignore
+.env
+logs/
+tests/
+celerybeat-schedule*
+uploads/
+

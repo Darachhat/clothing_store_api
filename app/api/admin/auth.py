@@ -10,7 +10,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 
 from app.core.deps import get_current_active_user
-from app.models.user import User
+from app.models import User
 
 _ALLOWED_ROLES: frozenset[str] = frozenset({"ADMIN", "MANAGER", "WAREHOUSE"})
 

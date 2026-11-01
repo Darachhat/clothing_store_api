@@ -9,20 +9,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import require_permission
-from app.models.user import User
+from app.models import User
 from app.repositories.product_repository import ProductVariantRepository
-from app.schemas.base import BaseSchema
+from app.schemas.base_schema import BASE_SCHEMA
 from app.utils.labels import LabelData, generate_labels_pdf
 
 router = APIRouter(prefix="/labels", tags=["Labels"])
 
 
-class LabelVariantRequest(BaseSchema):
+class LabelVariantRequest(BASE_SCHEMA):
     variant_id: UUID
     quantity: int = Field(ge=1, le=500)
 
 
-class LabelGenerateRequest(BaseSchema):
+class LabelGenerateRequest(BASE_SCHEMA):
     variants: list[LabelVariantRequest]
     paper_size: str = "THERMAL_50x30"
     label_width_mm: float = 50.0
@@ -31,6 +31,55 @@ class LabelGenerateRequest(BaseSchema):
     code_type: str = "BARCODE"  # "BARCODE" | "QR"
     show_khr: bool = True
     store_name_override: str | None = None
+
+
+@router.get("/presets")
+async def list_label_presets(
+    _: User = Depends(require_permission("product.read")),
+) -> list[dict]:
+    """Return standard garment sticker and sheet presets."""
+    return [
+        {
+            "id": "THERMAL_50x30",
+            "name": "Thermal Sticker Roll — 50 × 30 mm (Default)",
+            "paper_size": "THERMAL_50x30",
+            "label_width_mm": 50.0,
+            "label_height_mm": 30.0,
+            "columns": 1,
+        },
+        {
+            "id": "THERMAL_40x30",
+            "name": "Thermal Sticker Roll — 40 × 30 mm (Compact)",
+            "paper_size": "THERMAL_40x30",
+            "label_width_mm": 40.0,
+            "label_height_mm": 30.0,
+            "columns": 1,
+        },
+        {
+            "id": "THERMAL_60x40",
+            "name": "Thermal Sticker Roll — 60 × 40 mm (Large)",
+            "paper_size": "THERMAL_60x40",
+            "label_width_mm": 60.0,
+            "label_height_mm": 40.0,
+            "columns": 1,
+        },
+        {
+            "id": "A4",
+            "name": "A4 Sticker Sheet (Grid — 4 Columns • 48 × 30 mm)",
+            "paper_size": "A4",
+            "label_width_mm": 48.0,
+            "label_height_mm": 30.0,
+            "columns": 4,
+        },
+        {
+            "id": "A5",
+            "name": "A5 Sticker Sheet (Grid — 3 Columns • 45 × 28 mm)",
+            "paper_size": "A5",
+            "label_width_mm": 45.0,
+            "label_height_mm": 28.0,
+            "columns": 3,
+        },
+    ]
 
 
 @router.post("/generate")

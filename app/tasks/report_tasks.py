@@ -1,5 +1,5 @@
 """Report background tasks."""
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 
 from loguru import logger
 
@@ -12,9 +12,10 @@ def send_daily_sales_summary() -> dict:
     from sqlalchemy import and_, func, select
 
     from app.core.database import SyncSessionLocal
-    from app.models.sale import Sale
+    from app.models import Sale
+    from app.tasks.notification_tasks import _send_tg
 
-    yesterday = date.today() - timedelta(days=1)
+    yesterday = datetime.now(UTC).date() - timedelta(days=1)
     db = SyncSessionLocal()
     try:
         result = db.execute(
@@ -35,7 +36,12 @@ def send_daily_sales_summary() -> dict:
             "total_revenue": float(row.revenue),
         }
         logger.info(f"Daily summary: {summary}")
-        # TODO: Send via Telegram/email
+        msg = (
+            f"*Daily Sales Summary ({yesterday})*\n"
+            f"Total Orders: {row.count}\n"
+            f"Total Revenue: ${float(row.revenue):.2f}"
+        )
+        summary["notified"] = _send_tg(msg)
         return summary
     finally:
         db.close()

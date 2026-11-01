@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -71,15 +72,22 @@ _use_fallback    : bool                                              = False
 def get_redis_client() -> aioredis.Redis | _IN_MEMORY_REDIS_FALLBACK:
     """Get singleton Redis client instance (or in-memory fallback when Redis is unreachable in test/dev)."""
     global _redis_client
-    if _use_fallback or settings.ENV in ("testing", "test"):
+    if (
+        _use_fallback
+        or settings.ENV in ("testing", "test")
+        or settings.ENVIRONMENT in ("testing", "test")
+        or bool(os.getenv("PYTEST_CURRENT_TEST"))
+    ):
         return _fallback_client
     if _redis_client is None:
         _redis_client = aioredis.from_url(
-            settings.REDIS_URL
-            , decode_responses       = True
-            , socket_timeout         = 3.0
-            , socket_connect_timeout = 3.0
-            , max_connections        = 50
+            settings.REDIS_URL,
+            decode_responses=True,
+            socket_timeout=1.0,
+            socket_connect_timeout=1.0,
+            max_connections=50,
+            retry_on_timeout=False,
+            retry=None,
         )
     return _redis_client
 

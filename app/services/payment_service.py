@@ -23,8 +23,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.payment import PaymentTransaction
-from app.models.sale import Sale
+from app.models import PaymentTransaction
+from app.models import Sale
 from app.services.payway import map_payway_status, payway_client
 from app.services.sale_service import SaleService
 
@@ -343,6 +343,19 @@ class PaymentService:
                     logger.info(
                         f"[PaymentService] Sale {sale.id} completed via {payment_method_name} tran_id={tx.tran_id}"
                     )
+
+                    # Post-completion bookkeeping that every gateway-settled sale needs
+                    # (pushback, reconciler, POS poll and storefront poll all land here).
+                    try:
+                        from app.services.product_service import ProductService
+
+                        await ProductService.increment_inventory_version(self.db)
+                        if sale.promotion_id and (sale.notes or "").startswith("[ONLINE STORE]"):
+                            from app.services.misc_service import PromotionService
+
+                            await PromotionService(self.db).record_usage(sale.promotion_id)
+                    except Exception as post_exc:
+                        logger.warning(f"[PaymentService] Post-completion bookkeeping failed: {post_exc}")
 
                     # Fire Telegram notification (non-blocking)
                     try:

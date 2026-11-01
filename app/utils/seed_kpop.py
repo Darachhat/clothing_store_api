@@ -5,9 +5,9 @@ from slugify import slugify
 from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
-from app.models.branch import Warehouse
-from app.models.product import Brand, Category, Color, Product, ProductVariant, Size, Supplier
-from app.models.inventory import InventoryStock
+from app.models import Warehouse
+from app.models import Brand, Category, Color, Product, ProductVariant, Size, Supplier
+from app.models import InventoryStock
 from app.utils.generators import generate_qr_reference, generate_sku
 
 
@@ -245,7 +245,7 @@ async def main():
                 total_vars += 1
 
         # Also add sample promotions for testing discount codes
-        from app.models.misc import Promotion
+        from app.models import Promotion
         from datetime import datetime, timezone, timedelta
         
         promos = [

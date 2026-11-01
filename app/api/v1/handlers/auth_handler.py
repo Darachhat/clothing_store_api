@@ -5,16 +5,16 @@ from sqlalchemy.orm import Session
 
 from app.api.deps.database import get_db as get_sync_db
 from app.core.database import get_db as get_async_db
-from app.core.deps import get_current_active_user
-from app.models.user import User
-from app.schemas.auth import (
-    ChangePasswordRequest
-    , LoginRequest
-    , LoginResponse
-    , LogoutRequest
-    , RefreshRequest
-    , TokenResponse
-    , UserOut
+from app.core.deps import get_current_active_user, require_system_admin
+from app.models import User
+from app.schemas.auth_schema import (
+    CHANGE_PASSWORD_REQUEST_SCHEMA
+    , LOGIN_REQUEST_SCHEMA
+    , LOGIN_RESPONSE_SCHEMA
+    , LOGOUT_REQUEST_SCHEMA
+    , REFRESH_REQUEST_SCHEMA
+    , TOKEN_RESPONSE_SCHEMA
+    , USER_RESPONSE_SCHEMA
 )
 from app.schemas.auth_schema import (
     API_KEY_CREATED_SCHEMA
@@ -33,6 +33,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication & System Client Auth"])
     "/clients"
     , response_model = RESPONSE_ENVELOPE[API_KEY_CREATED_SCHEMA]
     , status_code    = status.HTTP_201_CREATED
+    , dependencies   = [Depends(require_system_admin)]
 )
 def register_system_client(
     body : SYSTEM_CLIENT_CREATE_SCHEMA
@@ -48,6 +49,7 @@ def register_system_client(
 @router.get(
     "/clients"
     , response_model = RESPONSE_ENVELOPE[List[SYSTEM_CLIENT_RESPONSE_SCHEMA]]
+    , dependencies   = [Depends(require_system_admin)]
 )
 def list_system_clients(db: Session = Depends(get_sync_db)):
     clients = AUTH_SERVICE.list_system_clients(db=db)
@@ -60,6 +62,7 @@ def list_system_clients(db: Session = Depends(get_sync_db)):
 @router.put(
     "/clients/{code}/revoke"
     , response_model = RESPONSE_ENVELOPE[SYSTEM_CLIENT_RESPONSE_SCHEMA]
+    , dependencies   = [Depends(require_system_admin)]
 )
 def revoke_system_client(
     code : str
@@ -74,30 +77,30 @@ def revoke_system_client(
 
 # ── User JWT Authentication (Store / Admin / Cashier) ────────────────────────
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=LOGIN_RESPONSE_SCHEMA)
 async def login(
-    body      : LoginRequest
+    body      : LOGIN_REQUEST_SCHEMA
     , request : Request
     , db      : Annotated[AsyncSession, Depends(get_async_db)]
-) -> LoginResponse:
+) -> LOGIN_RESPONSE_SCHEMA:
     service = AUTH_SERVICE(db)
     result  = await service.login(body.username, body.password, request)
-    return LoginResponse(**result)
+    return LOGIN_RESPONSE_SCHEMA(**result)
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=TOKEN_RESPONSE_SCHEMA)
 async def refresh(
-    body : RefreshRequest
+    body : REFRESH_REQUEST_SCHEMA
     , db : Annotated[AsyncSession, Depends(get_async_db)]
-) -> TokenResponse:
+) -> TOKEN_RESPONSE_SCHEMA:
     service = AUTH_SERVICE(db)
     result  = await service.refresh(body.refresh_token)
-    return TokenResponse(**result)
+    return TOKEN_RESPONSE_SCHEMA(**result)
 
 
 @router.post("/logout")
 async def logout(
-    body : LogoutRequest
+    body : LOGOUT_REQUEST_SCHEMA
     , db : Annotated[AsyncSession, Depends(get_async_db)]
 ) -> dict:
     service = AUTH_SERVICE(db)
@@ -105,7 +108,7 @@ async def logout(
     return {"message": "Logged out successfully"}
 
 
-@router.get("/me", response_model=UserOut)
+@router.get("/me", response_model=USER_RESPONSE_SCHEMA)
 async def get_me(
     current_user : Annotated[User, Depends(get_current_active_user)]
 ) -> User:
@@ -114,7 +117,7 @@ async def get_me(
 
 @router.post("/change-password")
 async def change_password(
-    body           : ChangePasswordRequest
+    body           : CHANGE_PASSWORD_REQUEST_SCHEMA
     , current_user : Annotated[User, Depends(get_current_active_user)]
     , db           : Annotated[AsyncSession, Depends(get_async_db)]
 ) -> dict:

@@ -64,6 +64,14 @@ class MinioService:
         except Exception as e:
             logger.warning(f"MinIO bucket initialization notice: {e}")
 
+    ALLOWED_EXTENSIONS = {
+        ".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg",
+        ".pdf", ".csv", ".txt", ".xlsx", ".xls", ".doc", ".docx",
+    }
+    BLOCKED_EXTENSIONS = {
+        ".exe", ".bat", ".cmd", ".sh", ".ps1", ".php", ".jsp", ".py", ".rb", ".pl", ".dll", ".so", ".msi",
+    }
+
     def upload_file(
         self,
         file: UploadFile,
@@ -77,6 +85,11 @@ class MinioService:
         folder = folder.strip("/ ") or "attachments"
         original_name = os.path.basename(file.filename or "attachment")
         ext = os.path.splitext(original_name)[1].lower()
+        if ext in self.BLOCKED_EXTENSIONS or (ext and ext not in self.ALLOWED_EXTENSIONS):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File extension '{ext}' is not allowed",
+            )
         unique_id = str(uuid.uuid4())
         safe_name = f"{unique_id[:8]}_{original_name.replace(' ', '_')}"
         now = datetime.utcnow()

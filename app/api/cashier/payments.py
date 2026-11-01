@@ -17,8 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_active_user
-from app.models.payment import PaymentTransaction
-from app.models.user import User
+from app.models import PaymentTransaction
+from app.models import User
 from app.services.payment_service import PaymentService
 
 router = APIRouter(prefix="/payments/aba", tags=["ABA PayWay"])

@@ -9,10 +9,10 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
-from app.models.branch import Branch, Warehouse
-from app.models.misc import Expense, ExpenseCategory
-from app.models.product import Brand, Category, Color, Product, ProductVariant, Size
-from app.models.user import Permission, Role, User
+from app.models import Branch, Warehouse
+from app.models import Expense, ExpenseCategory
+from app.models import Brand, Category, Color, Product, ProductVariant, Size
+from app.models import Permission, Role, User
 from app.services.inventory_service import InventoryService
 from app.services.sale_service import SaleService
 
@@ -113,7 +113,7 @@ async def make_completed_sale(
     """Helper: create + complete a sale."""
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
-    from app.models.sale import Sale as SaleModel
+    from app.models import Sale as SaleModel
 
     service = SaleService(db)
     sale = await service.create_sale(
@@ -171,7 +171,7 @@ async def test_dashboard_revenue_reflects_sales(db: AsyncSession) -> None:
 
     # Check reports endpoint via service layer (direct DB query)
     from sqlalchemy import and_, func, select
-    from app.models.sale import Sale
+    from app.models import Sale
 
     now = datetime.now(UTC)
     today_start = datetime.combine(now.date(), datetime.min.time()).replace(tzinfo=UTC)
@@ -198,7 +198,7 @@ async def test_sales_report_date_range(client: AsyncClient, db: AsyncSession) ->
     token = resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    today = date.today().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     rpt = await client.get(
         f"/api/v1/reports/sales?start_date={today}&end_date={today}",
         headers=headers,
@@ -223,7 +223,7 @@ async def test_profit_report_calculation(client: AsyncClient, db: AsyncSession) 
     token = resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    today = date.today().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     rpt = await client.get(
         f"/api/v1/reports/profit?start_date={today}&end_date={today}",
         headers=headers,
@@ -264,14 +264,14 @@ async def test_inventory_report_returns_stock_data(client: AsyncClient, db: Asyn
 async def test_net_profit_decreases_with_expenses(db: AsyncSession) -> None:
     """Net profit should decrease when expenses are added."""
     from sqlalchemy import and_, func, select
-    from app.models.sale import Sale, SaleItem
-    from app.models.misc import Expense
+    from app.models import Sale, SaleItem
+    from app.models import Expense
 
     infra = await create_report_test_infra(db)
     await make_completed_sale(db, infra, qty=4)
 
     # Directly compute gross profit
-    today = date.today()
+    today = datetime.now(UTC).date()
     today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
 
     cogs_res = await db.execute(
@@ -332,7 +332,7 @@ async def test_reports_accept_from_to_date_and_return_rows(client: AsyncClient, 
     token = resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    today = date.today().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     sales_rpt = await client.get(
         f"/api/v1/reports/sales?from_date={today}&to_date={today}&group_by=day",
         headers=headers,
@@ -355,3 +355,72 @@ async def test_reports_accept_from_to_date_and_return_rows(client: AsyncClient, 
     assert len(p_data["rows"]) == 1
     assert float(p_data["rows"][0]["net_profit"]) == 24.00
 
+
+
+# ── Warehouse dashboard (inventory.read only, no revenue data) ───────────────
+
+
+async def _make_user_with_perms(db: AsyncSession, infra: dict, username: str, codes: list[str]):
+    from sqlalchemy import select
+
+    existing = (
+        await db.execute(select(Permission).where(Permission.code.in_(codes)))
+    ).scalars().all()
+    have = {p.code for p in existing}
+    new = [Permission(code=c, name=c, module=c.split(".")[0]) for c in codes if c not in have]
+    db.add_all(new)
+    await db.flush()
+    role = Role(name=f"ROLE_{username}", permissions=[*existing, *new])
+    db.add(role)
+    await db.flush()
+    user = User(
+        username=username,
+        email=f"{username}@test.com",
+        full_name=username,
+        hashed_password=hash_password("pw_123456"),
+        branch_id=infra["branch"].id,
+        status="ACTIVE",
+    )
+    user.roles = [role]
+    db.add(user)
+    await db.commit()
+
+
+async def _login_headers(client: AsyncClient, username: str) -> dict:
+    resp = await client.post(
+        "/api/v1/auth/login", json={"username": username, "password": "pw_123456"}
+    )
+    return {"Authorization": f"Bearer {resp.json()['access_token']}"}
+
+
+@pytest.mark.asyncio
+async def test_warehouse_dashboard_needs_only_inventory_read(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    infra = await create_report_test_infra(db)
+    await _make_user_with_perms(db, infra, "wh_user", ["inventory.read"])
+    headers = await _login_headers(client, "wh_user")
+
+    resp = await client.get("/api/v1/reports/warehouse-dashboard?period=today", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_units"] == 100  # initial stock from the test infra
+    assert data["units_in"] == 100  # INITIAL_STOCK movement happened today
+    assert data["units_out"] == 0
+    assert data["out_of_stock_count"] == 0
+    assert data["open_transfers"] == 0
+    assert "revenue" not in data and "gross_profit" not in data
+
+    # The sales dashboard remains protected
+    assert (await client.get("/api/v1/reports/dashboard", headers=headers)).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_warehouse_dashboard_denied_without_permission(
+    client: AsyncClient, db: AsyncSession
+) -> None:
+    infra = await create_report_test_infra(db)
+    await _make_user_with_perms(db, infra, "nobody", ["sale.read"])
+    headers = await _login_headers(client, "nobody")
+    resp = await client.get("/api/v1/reports/warehouse-dashboard", headers=headers)
+    assert resp.status_code == 403

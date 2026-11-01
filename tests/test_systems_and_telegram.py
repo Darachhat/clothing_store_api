@@ -22,7 +22,7 @@ def test_ulid_and_header_redaction():
     assert redacted["Content-Type"] == "application/json"
 
 
-def test_auth_client_registration_and_verification(sync_client):
+def test_auth_client_registration_and_verification(sync_client, allow_system_admin):
     # Register client
     resp = sync_client.post(
         "/api/v1/auth/clients"
@@ -49,7 +49,7 @@ def test_auth_client_registration_and_verification(sync_client):
     assert rev_resp.json()["data"]["status_code"] == "inactive"
 
 
-def test_system_endpoint_and_credential_crud_endpoints(sync_client):
+def test_system_endpoint_and_credential_crud_endpoints(sync_client, allow_system_admin):
     # 1. Create System
     sys_resp = sync_client.post(
         "/api/v1/systems"
@@ -161,7 +161,7 @@ async def test_system_service_call_endpoint_outbound(db_session):
         assert called_kwargs["headers"]["Authorization"] == build_basic_auth("qip_user", "qip_secret")
 
 
-def test_telegram_bot_and_chat_crud_and_send(sync_client, db_session):
+def test_telegram_bot_and_chat_crud_and_send(sync_client, db_session, allow_system_admin):
     # 1. Create Telegram Bot
     bot_resp = sync_client.post(
         "/api/v1/telegram/bots"

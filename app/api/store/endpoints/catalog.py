@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.models.product import Product, ProductVariant
+from app.models import Product, ProductVariant
 from app.repositories.product_repository import ProductRepository
 
 router = APIRouter(prefix="/catalog", tags=["Store Catalog"])
@@ -57,7 +57,11 @@ async def get_public_product(
         select(Product)
         .where(Product.id == product_id, Product.status == "ACTIVE")
         .options(
-            selectinload(Product.variants),
+            selectinload(Product.variants).options(
+                selectinload(ProductVariant.color),
+                selectinload(ProductVariant.size),
+                selectinload(ProductVariant.inventory_stocks),
+            ),
             selectinload(Product.category),
             selectinload(Product.brand),
         )
@@ -80,17 +84,25 @@ def _serialize_product(product: Product, include_variants: bool = False) -> dict
         "status": product.status,
     }
     if include_variants and hasattr(product, "variants"):
-        data["variants"] = [
-            {
-                "id": str(v.id),
-                "sku": v.sku,
-                "color": v.color.name if getattr(v, "color", None) else None,
-                "size": v.size.name if getattr(v, "size", None) else None,
-                "price": float(v.selling_price) if hasattr(v, "selling_price") else None,
-                "stock": v.stock_quantity if hasattr(v, "stock_quantity") else None,
-                "barcode": v.barcode if hasattr(v, "barcode") else None,
-            }
-            for v in product.variants
-            if getattr(v, "status", "ACTIVE") == "ACTIVE"
-        ]
+        variants_list = []
+        for v in product.variants:
+            if getattr(v, "status", "ACTIVE") != "ACTIVE":
+                continue
+            stocks = getattr(v, "inventory_stocks", None)
+            if stocks is not None:
+                stock_qty = sum(int(getattr(s, "quantity", 0) or 0) for s in stocks)
+            else:
+                stock_qty = getattr(v, "stock_quantity", 0)
+            variants_list.append(
+                {
+                    "id": str(v.id),
+                    "sku": v.sku,
+                    "color": v.color.name if getattr(v, "color", None) else None,
+                    "size": v.size.name if getattr(v, "size", None) else None,
+                    "price": float(v.selling_price) if hasattr(v, "selling_price") else None,
+                    "stock": stock_qty,
+                    "barcode": v.barcode if hasattr(v, "barcode") else None,
+                }
+            )
+        data["variants"] = variants_list
     return data

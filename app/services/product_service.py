@@ -11,13 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache.product_cache import ProductCache
 from app.core.logger import logger
-from app.models.product import CatalogVersion, Color, Product, ProductVariant, Size
+from app.models import CatalogVersion, Color, Product, ProductVariant, Size
 from app.repositories.product_repository import ProductRepository, ProductVariantRepository
-from app.schemas.product import (
-    ProductCreate
-    , ProductUpdate
-    , ProductVariantCreate
-    , ProductVariantUpdate
+from app.schemas.product_schema import (
+    PRODUCT_CREATE_SCHEMA
+    , PRODUCT_UPDATE_SCHEMA
+    , PRODUCT_VARIANT_CREATE_SCHEMA
+    , PRODUCT_VARIANT_UPDATE_SCHEMA
 )
 from app.utils.generators import generate_qr_reference, generate_sku
 
@@ -75,8 +75,8 @@ class PRODUCT_SERVICE:
             update(CatalogVersion)
             .where(CatalogVersion.id == 1)
             .values(
-                version    = CatalogVersion.version + 1
-                , updated_at = func.now()
+                version            = CatalogVersion.version + 1
+                , updated_datetime = func.now()
             )
             .returning(CatalogVersion.version)
         )
@@ -104,8 +104,8 @@ class PRODUCT_SERVICE:
             update(CatalogVersion)
             .where(CatalogVersion.id == 1)
             .values(
-                inventory_version = CatalogVersion.inventory_version + 1
-                , updated_at      = func.now()
+                inventory_version  = CatalogVersion.inventory_version + 1
+                , updated_datetime = func.now()
             )
             .returning(CatalogVersion.inventory_version)
         )
@@ -140,7 +140,7 @@ class PRODUCT_SERVICE:
         )
 
     @classmethod
-    async def create_product(cls, db: AsyncSession, body: ProductCreate) -> Product:
+    async def create_product(cls, db: AsyncSession, body: PRODUCT_CREATE_SCHEMA) -> Product:
         repo = ProductRepository(db)
 
         slug      = slugify(body.name)
@@ -157,7 +157,15 @@ class PRODUCT_SERVICE:
 
         count_result = await db.execute(select(func.count()).select_from(Product))
         count        = count_result.scalar_one()
-        code         = f"PROD-{count + 1:05d}"
+        seq_num      = count + 1
+        while True:
+            code = f"PROD-{seq_num:05d}"
+            existing_code = await db.execute(
+                select(Product.id).where(Product.code == code)
+            )
+            if existing_code.scalar_one_or_none() is None:
+                break
+            seq_num += 1
 
         product = await repo.create(
             code   = code
@@ -177,7 +185,7 @@ class PRODUCT_SERVICE:
         return product
 
     @classmethod
-    async def update_product(cls, db: AsyncSession, product_id: UUID, body: ProductUpdate) -> Product:
+    async def update_product(cls, db: AsyncSession, product_id: UUID, body: PRODUCT_UPDATE_SCHEMA) -> Product:
         repo    = ProductRepository(db)
         product = await repo.get_by_id(product_id)
         if not product:
@@ -219,7 +227,7 @@ class PRODUCT_SERVICE:
         )
 
     @classmethod
-    async def create_variant(cls, db: AsyncSession, body: ProductVariantCreate) -> ProductVariant:
+    async def create_variant(cls, db: AsyncSession, body: PRODUCT_VARIANT_CREATE_SCHEMA) -> ProductVariant:
         repo         = ProductVariantRepository(db)
         product_repo = ProductRepository(db)
 
@@ -242,8 +250,16 @@ class PRODUCT_SERVICE:
             select(func.count()).select_from(ProductVariant)
             .where(ProductVariant.product_id == body.product_id)
         )
-        count        = count_res.scalar_one()
-        sku          = generate_sku(product.code, color_name, size_name, count + 1)
+        count = count_res.scalar_one()
+        seq_num = count + 1
+        while True:
+            sku = generate_sku(product.code, color_name, size_name, seq_num)
+            existing_sku = await db.execute(
+                select(ProductVariant.id).where(ProductVariant.sku == sku)
+            )
+            if existing_sku.scalar_one_or_none() is None:
+                break
+            seq_num += 1
         qr_reference = await generate_qr_reference(db)
 
         variant = await repo.create(sku=sku, qr_reference=qr_reference, **body.model_dump())
@@ -295,12 +311,25 @@ class PRODUCT_SERVICE:
         return variant
 
     @classmethod
-    async def update_variant(cls, db: AsyncSession, variant_id: UUID, body: ProductVariantUpdate) -> ProductVariant:
+    async def update_variant(cls, db: AsyncSession, variant_id: UUID, body: PRODUCT_VARIANT_UPDATE_SCHEMA) -> ProductVariant:
         repo    = ProductVariantRepository(db)
         variant = await repo.get_by_id(variant_id)
         if not variant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
         variant = await repo.update(variant, **body.model_dump(exclude_none=True))
+        await cls.increment_catalog_version(db)
+        await db.commit()
+        updated = await repo.get_by_id(variant.id)
+        return updated or variant
+
+    @classmethod
+    async def regenerate_variant_codes(cls, db: AsyncSession, variant_id: UUID) -> ProductVariant:
+        repo    = ProductVariantRepository(db)
+        variant = await repo.get_by_id(variant_id)
+        if not variant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
+        new_qr = await generate_qr_reference(db)
+        variant = await repo.update(variant, qr_reference=new_qr)
         await cls.increment_catalog_version(db)
         await db.commit()
         updated = await repo.get_by_id(variant.id)

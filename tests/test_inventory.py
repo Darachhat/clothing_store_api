@@ -7,9 +7,9 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
-from app.models.branch import Branch, Warehouse
-from app.models.product import Brand, Category, Color, Product, ProductVariant, Size
-from app.models.user import Role, User
+from app.models import Branch, Warehouse
+from app.models import Brand, Category, Color, Product, ProductVariant, Size
+from app.models import Role, User
 from app.repositories.inventory_repository import InventoryStockRepository
 from app.services.inventory_service import InventoryService
 

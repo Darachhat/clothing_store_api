@@ -17,12 +17,12 @@ from sqlalchemy import select, text
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.security import hash_password
-from app.models.branch import Branch, Warehouse
-from app.models.customer import Customer, LoyaltyAccount
-from app.models.inventory import InventoryStock
-from app.models.misc import ExpenseCategory
-from app.models.product import Brand, Category, Color, Product, ProductVariant, Size, Supplier
-from app.models.user import Permission, Role, User
+from app.models import Branch, Warehouse
+from app.models import Customer, LoyaltyAccount
+from app.models import InventoryStock
+from app.models import ExpenseCategory
+from app.models import Brand, Category, Color, Product, ProductVariant, Size, Supplier
+from app.models import Permission, Role, User
 
 if settings.ENVIRONMENT == "production":
     logger.error("⛔ Seed script cannot be run in production!")
@@ -41,6 +41,7 @@ PERMISSIONS = [
     ("sale.create", "Create Sales", "sales"),
     ("sale.refund", "Process Refunds", "sales"),
     ("purchase.read", "View Purchases", "purchases"),
+    ("purchase.create", "Create / Approve Purchase Orders", "purchases"),
     ("purchase.receive", "Receive Goods", "purchases"),
     ("customer.read", "View Customers", "customers"),
     ("customer.create", "Create Customers", "customers"),
@@ -56,7 +57,7 @@ ROLES = {
         "product.read", "product.create", "product.update",
         "inventory.read", "inventory.adjust", "inventory.transfer",
         "sale.read", "sale.create", "sale.refund",
-        "purchase.read", "purchase.receive",
+        "purchase.read", "purchase.create", "purchase.receive",
         "customer.read", "customer.create", "customer.update",
         "report.read",
     ],
@@ -69,7 +70,7 @@ ROLES = {
     "WAREHOUSE": [
         "product.read",
         "inventory.read", "inventory.adjust", "inventory.transfer",
-        "purchase.read", "purchase.receive",
+        "purchase.read", "purchase.create", "purchase.receive",
     ],
 }
 

@@ -7,11 +7,11 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.purchase import GoodsReceipt, GoodsReceiptItem, PurchaseItem, PurchaseOrder
+from app.models import GoodsReceipt, GoodsReceiptItem, PurchaseItem, PurchaseOrder
 from app.repositories.inventory_repository import InventoryStockRepository
 from app.repositories.product_repository import ProductVariantRepository
 from app.repositories.purchase_repository import GoodsReceiptRepository, PurchaseOrderRepository
-from app.schemas.purchase import GoodsReceiptCreate, PurchaseOrderCreate, PurchaseOrderUpdate
+from app.schemas.purchase_schema import GOODS_RECEIPT_CREATE_SCHEMA, PURCHASE_ORDER_CREATE_SCHEMA, PURCHASE_ORDER_UPDATE_SCHEMA
 from app.utils.generators import generate_gr_number, generate_po_number
 
 
@@ -26,8 +26,46 @@ class PurchaseService:
     async def create_purchase_order(
         self,
         created_by: UUID,
-        data: PurchaseOrderCreate,
+        data: PURCHASE_ORDER_CREATE_SCHEMA,
     ) -> PurchaseOrder:
+        from sqlalchemy import select
+        from app.models import Branch, Warehouse
+
+        branch_id = data.branch_id
+        warehouse_id = data.warehouse_id
+
+        if not branch_id or not warehouse_id:
+            if warehouse_id and not branch_id:
+                wh = (await self.db.execute(select(Warehouse).where(Warehouse.id == warehouse_id))).scalar_one_or_none()
+                if wh:
+                    branch_id = wh.branch_id
+
+            if not branch_id:
+                branch = (await self.db.execute(select(Branch).where(Branch.status == "ACTIVE").order_by(Branch.created_at.asc()).limit(1))).scalar_one_or_none()
+                if not branch:
+                    branch = (await self.db.execute(select(Branch).limit(1))).scalar_one_or_none()
+                if branch:
+                    branch_id = branch.id
+
+            if not warehouse_id and branch_id:
+                wh = (
+                    await self.db.execute(
+                        select(Warehouse)
+                        .where(Warehouse.branch_id == branch_id, Warehouse.status == "ACTIVE")
+                        .order_by(Warehouse.is_default.desc(), Warehouse.created_at.asc())
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+                if wh:
+                    warehouse_id = wh.id
+
+            if not warehouse_id:
+                wh_any = (await self.db.execute(select(Warehouse).limit(1))).scalar_one_or_none()
+                if wh_any:
+                    warehouse_id = wh_any.id
+                    if not branch_id:
+                        branch_id = wh_any.branch_id
+
         po_number = await generate_po_number(self.db)
 
         subtotal = Decimal("0")
@@ -57,8 +95,8 @@ class PurchaseService:
         po = PurchaseOrder(
             po_number=po_number,
             supplier_id=data.supplier_id,
-            branch_id=data.branch_id,
-            warehouse_id=data.warehouse_id,
+            branch_id=branch_id,
+            warehouse_id=warehouse_id,
             status="DRAFT",
             subtotal=subtotal,
             tax_amount=data.tax_amount,
@@ -76,7 +114,7 @@ class PurchaseService:
     async def update_purchase_order(
         self,
         po_id: UUID,
-        data: PurchaseOrderUpdate,
+        data: PURCHASE_ORDER_UPDATE_SCHEMA,
     ) -> PurchaseOrder:
         po = await self.po_repo.get_by_id(po_id)
         if not po:
@@ -117,6 +155,17 @@ class PurchaseService:
 
         po.status = "ORDERED"
         po.approved_by = approved_by
+        from app.services.audit_service import AuditService
+
+        await AuditService.record(
+            self.db,
+            action="PURCHASE_ORDER_APPROVED",
+            entity_type="purchase_order",
+            entity_id=po.id,
+            user_id=approved_by,
+            old_data={"status": "DRAFT"},
+            new_data={"status": "ORDERED", "po_number": po.po_number},
+        )
         await self.db.flush()
         return await self.po_repo.get_by_id(po.id)
 
@@ -143,7 +192,7 @@ class PurchaseService:
     async def create_goods_receipt(
         self,
         received_by: UUID,
-        data: GoodsReceiptCreate,
+        data: GOODS_RECEIPT_CREATE_SCHEMA,
     ) -> GoodsReceipt:
         po = await self.po_repo.get_by_id(data.purchase_order_id)
         if not po:
@@ -160,34 +209,40 @@ class PurchaseService:
 
         target_warehouse_id = data.warehouse_id or po.warehouse_id
         gr_number = await generate_gr_number(self.db)
+        receipt_notes = data.notes if data.notes is not None else getattr(data, "note", None)
 
         gr = GoodsReceipt(
             gr_number=gr_number,
             purchase_order_id=po.id,
             warehouse_id=target_warehouse_id,
             status="COMPLETED",
-            notes=data.notes,
+            notes=receipt_notes,
             received_by=received_by,
         )
         self.db.add(gr)
         await self.db.flush()
 
         po_items_map = {item.id: item for item in po.items}
+        po_items_by_variant = {item.variant_id: item for item in po.items}
 
         for item_in in data.items:
-            po_item = po_items_map.get(item_in.purchase_item_id)
+            po_item = po_items_map.get(item_in.purchase_item_id) if item_in.purchase_item_id else None
+            if not po_item:
+                po_item = po_items_by_variant.get(item_in.variant_id)
             if not po_item:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Purchase item {item_in.purchase_item_id} does not belong to purchase order {po.id}",
+                    detail=f"Purchase item {item_in.purchase_item_id or item_in.variant_id} does not belong to purchase order {po.id}",
                 )
+
+            effective_unit_cost = item_in.unit_cost if item_in.unit_cost is not None else po_item.unit_cost
 
             gr_item = GoodsReceiptItem(
                 goods_receipt_id=gr.id,
                 purchase_item_id=po_item.id,
                 variant_id=item_in.variant_id,
                 quantity_received=item_in.quantity_received,
-                unit_cost=item_in.unit_cost,
+                unit_cost=effective_unit_cost,
                 notes=item_in.notes,
             )
             self.db.add(gr_item)
@@ -210,7 +265,7 @@ class PurchaseService:
             # Update variant cost_price if desired
             variant = await self.variant_repo.get_by_id(item_in.variant_id)
             if variant:
-                variant.cost_price = item_in.unit_cost
+                variant.cost_price = effective_unit_cost
 
         # Update PO status based on received items
         all_completed = True
@@ -228,5 +283,23 @@ class PurchaseService:
         else:
             po.status = "ORDERED"
 
+        from app.services.audit_service import AuditService
+        from app.services.product_service import ProductService
+
+        await AuditService.record(
+            self.db,
+            action="GOODS_RECEIPT_CREATED",
+            entity_type="goods_receipt",
+            entity_id=gr.id,
+            user_id=received_by,
+            new_data={
+                "gr_number": gr.gr_number,
+                "purchase_order_id": str(po.id),
+                "po_status": po.status,
+                "warehouse_id": str(target_warehouse_id) if target_warehouse_id else None,
+            },
+        )
+        await ProductService.increment_inventory_version(self.db)
+        await ProductService.increment_catalog_version(self.db)
         await self.db.flush()
         return await self.gr_repo.get_by_id(gr.id)

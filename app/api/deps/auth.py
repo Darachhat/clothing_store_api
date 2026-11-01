@@ -1,5 +1,3 @@
-from typing import Optional
-
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
@@ -10,22 +8,17 @@ from app.core.deps import (
     , get_current_user
     , require_permission
 )
-from app.core.enum.common_enum import AUTH_TYPE_ENUM, CHANNEL_ENUM, TRAFFIC_TYPE_ENUM
 from app.core.exceptions import UNAUTHORIZED_EXCEPTION
 from app.core.logger import logger
-from app.core.utils.crypto_utils import hash_api_key, parse_basic_auth
 from app.middleware.types import AUTH_CONTEXT
-from app.models.auth_model import (
-    CREDENTIAL_BASIC_MODEL
-    , CREDENTIAL_BEARER_MODEL
-    , SYSTEM_CLIENT_MODEL
-)
+from app.services.system_auth_service import SYSTEM_AUTH_SERVICE
 
 
 class AUTH_DEPS:
     """
-    FastAPI dependency class providing layered authentication checks.
-    Modeled after templete_api's AUTH_DEPS and AUTH_CONTEXT architecture.
+    Per-route dependencies for endpoints that must be called by an authenticated *system client*.
+    All verification is delegated to SYSTEM_AUTH_SERVICE (the same code the global gate uses),
+    so secrets are only ever compared against their stored hashes.
     """
 
     @staticmethod
@@ -44,124 +37,26 @@ class AUTH_DEPS:
         return auth
 
     @staticmethod
-    def require_verified_client(
+    def require_system_credential(
         request : Request
-        , db    : Session      = Depends(get_db)
-        , auth  : AUTH_CONTEXT = Depends(get_context)
+        , db    : Session = Depends(get_db)
     ) -> AUTH_CONTEXT:
-        raw_api_key = request.headers.get(settings.API_KEY_HEADER_NAME)
-        client_code = request.headers.get("X-CLIENT-ID")
-
-        if not raw_api_key:
-            raise UNAUTHORIZED_EXCEPTION(f"Missing required header: {settings.API_KEY_HEADER_NAME}")
-
-        if not client_code:
-            raise UNAUTHORIZED_EXCEPTION("Missing required header: X-CLIENT-ID")
-
-        client : Optional[SYSTEM_CLIENT_MODEL] = (
-            db.query(SYSTEM_CLIENT_MODEL)
-            .filter(
-                SYSTEM_CLIENT_MODEL.code == client_code
-                , SYSTEM_CLIENT_MODEL.deleted_datetime.is_(None)
-                , SYSTEM_CLIENT_MODEL.status_code.in_(["active", "ACTIVE"])
+        context, error = SYSTEM_AUTH_SERVICE.authenticate(db, request.headers)
+        if not context:
+            logger.warning(f"[AUTH_DEPS] system credential rejected: {error or 'not provided'}")
+            raise UNAUTHORIZED_EXCEPTION(
+                f"A valid credential is required in {settings.SYSTEM_AUTH_HEADER_NAME} "
+                f"or {settings.API_KEY_HEADER_NAME} + X-CLIENT-ID."
             )
-            .first()
-        )
+        request.state.auth        = context
+        request.state.system_code = context.system_code
+        request.state.channel     = context.channel
+        return context
 
-        if not client:
-            logger.warning(f"[AUTH_DEPS] Unknown or inactive system client: code={client_code}")
-            raise UNAUTHORIZED_EXCEPTION(f"System client '{client_code}' is not registered or is inactive.")
-
-        if client.api_key_hash != hash_api_key(raw_api_key):
-            logger.warning(f"[AUTH_DEPS] Invalid API key for client: code={client_code}")
-            raise UNAUTHORIZED_EXCEPTION("Invalid API key provided.")
-
-        auth.client_id            = str(client.id)
-        auth.client_name          = client.name
-        auth.system_code          = client.code
-        auth.auth_type            = AUTH_TYPE_ENUM.API_KEY.value
-        auth.channel              = CHANNEL_ENUM.SYSTEM.value
-        auth.is_authenticated     = True
-        request.state.system_code = client.code
-        request.state.channel     = CHANNEL_ENUM.SYSTEM.value
-
-        return auth
-
-    @staticmethod
-    def require_basic_credential(
-        request : Request
-        , db    : Session      = Depends(get_db)
-        , auth  : AUTH_CONTEXT = Depends(get_context)
-    ) -> AUTH_CONTEXT:
-        auth_header = request.headers.get("Authorization")
-        parsed      = parse_basic_auth(auth_header)
-        if not parsed:
-            raise UNAUTHORIZED_EXCEPTION("Missing or malformed Basic Authorization header.")
-
-        username, password = parsed
-        cred : Optional[CREDENTIAL_BASIC_MODEL] = (
-            db.query(CREDENTIAL_BASIC_MODEL)
-            .filter(
-                CREDENTIAL_BASIC_MODEL.username == username
-                , CREDENTIAL_BASIC_MODEL.password == password
-                , CREDENTIAL_BASIC_MODEL.traffic_type == TRAFFIC_TYPE_ENUM.INBOUND.value
-                , CREDENTIAL_BASIC_MODEL.deleted_datetime.is_(None)
-                , CREDENTIAL_BASIC_MODEL.status_code.in_(["active", "ACTIVE"])
-            )
-            .first()
-        )
-
-        if not cred:
-            logger.warning(f"[AUTH_DEPS] Invalid Basic Auth credentials for username={username}")
-            raise UNAUTHORIZED_EXCEPTION("Invalid Basic Auth credentials.")
-
-        auth.client_id            = str(cred.id)
-        auth.client_name          = cred.username
-        auth.system_code          = cred.system_code
-        auth.auth_type            = AUTH_TYPE_ENUM.BASIC.value
-        auth.channel              = CHANNEL_ENUM.SYSTEM.value
-        auth.is_authenticated     = True
-        request.state.system_code = cred.system_code
-        request.state.channel     = CHANNEL_ENUM.SYSTEM.value
-
-        return auth
-
-    @staticmethod
-    def require_bearer_credential(
-        request : Request
-        , db    : Session      = Depends(get_db)
-        , auth  : AUTH_CONTEXT = Depends(get_context)
-    ) -> AUTH_CONTEXT:
-        auth_header = request.headers.get("Authorization", "")
-        if not auth_header.lower().startswith("bearer "):
-            raise UNAUTHORIZED_EXCEPTION("Missing or malformed Bearer Authorization header.")
-
-        token = auth_header.split(" ", 1)[1].strip()
-        cred : Optional[CREDENTIAL_BEARER_MODEL] = (
-            db.query(CREDENTIAL_BEARER_MODEL)
-            .filter(
-                CREDENTIAL_BEARER_MODEL.token_value == token
-                , CREDENTIAL_BEARER_MODEL.traffic_type == TRAFFIC_TYPE_ENUM.INBOUND.value
-                , CREDENTIAL_BEARER_MODEL.deleted_datetime.is_(None)
-                , CREDENTIAL_BEARER_MODEL.status_code.in_(["active", "ACTIVE"])
-            )
-            .first()
-        )
-
-        if not cred:
-            logger.warning("[AUTH_DEPS] Invalid Bearer token credential.")
-            raise UNAUTHORIZED_EXCEPTION("Invalid Bearer token credential.")
-
-        auth.client_id            = str(cred.id)
-        auth.client_name          = cred.system_code
-        auth.system_code          = cred.system_code
-        auth.auth_type            = AUTH_TYPE_ENUM.BEARER.value
-        auth.channel              = CHANNEL_ENUM.SYSTEM.value
-        auth.is_authenticated     = True
-        request.state.system_code = cred.system_code
-        request.state.channel     = CHANNEL_ENUM.SYSTEM.value
-
-        return auth
+    # Backwards-compatible names used by earlier template code; all share one verifier.
+    require_verified_client    = require_system_credential
+    require_basic_credential   = require_system_credential
+    require_bearer_credential  = require_system_credential
 
 
 __all__ = [
@@ -170,4 +65,3 @@ __all__ = [
     , "get_current_active_user"
     , "require_permission"
 ]
-

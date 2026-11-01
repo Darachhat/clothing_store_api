@@ -18,14 +18,14 @@ from app.core.redis import (
     redis_incr,
     redis_set,
 )
-from app.models.product import CatalogVersion
+from app.models import CatalogVersion
 from app.repositories.product_repository import ProductRepository
-from app.schemas.product import (
-    PaginationMetadata,
-    ProductOut,
-    ProductPaginationResponse,
-    ProductPaginationWithVariantsResponse,
-    ProductWithVariants,
+from app.schemas.product_schema import (
+    PAGINATION_METADATA_SCHEMA,
+    PRODUCT_RESPONSE_SCHEMA,
+    PRODUCT_PAGINATION_RESPONSE_SCHEMA,
+    PRODUCT_PAGINATION_WITH_VARIANTS_RESPONSE_SCHEMA,
+    PRODUCT_WITH_VARIANTS_SCHEMA,
 )
 
 
@@ -229,7 +229,7 @@ class ProductCache:
             page_sz = normalized["page_size"]
             total_pages = math.ceil(total / page_sz) if total > 0 else 1
 
-            pagination_meta = PaginationMetadata(
+            pagination_meta = PAGINATION_METADATA_SCHEMA(
                 page=page_num,
                 page_size=page_sz,
                 total=total,
@@ -239,14 +239,14 @@ class ProductCache:
             )
 
             if include_variants or include_stock:
-                # Serialize with variant data using ProductWithVariants
-                pydantic_items = [ProductWithVariants.model_validate(p) for p in products]
-                response_obj = ProductPaginationWithVariantsResponse(
+                # Serialize with variant data using PRODUCT_WITH_VARIANTS_SCHEMA
+                pydantic_items = [PRODUCT_WITH_VARIANTS_SCHEMA.model_validate(p) for p in products]
+                response_obj = PRODUCT_PAGINATION_WITH_VARIANTS_RESPONSE_SCHEMA(
                     items=pydantic_items, pagination=pagination_meta
                 )
             else:
-                pydantic_items = [ProductOut.model_validate(p) for p in products]
-                response_obj = ProductPaginationResponse(
+                pydantic_items = [PRODUCT_RESPONSE_SCHEMA.model_validate(p) for p in products]
+                response_obj = PRODUCT_PAGINATION_RESPONSE_SCHEMA(
                     items=pydantic_items, pagination=pagination_meta
                 )
             return response_obj.model_dump(mode="json"), v_prod_start, v_inv_start

@@ -16,7 +16,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.security import verify_access_token
 from app.core.database import get_db
-from app.models.user import User
+from app.models import User
 from app.repositories.user_repository import UserRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID

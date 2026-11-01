@@ -41,6 +41,10 @@ class TELEGRAM_BOT_RESPONSE_SCHEMA(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    def model_post_init(self, __context) -> None:
+        if self.token and len(self.token) > 8 and not self.token.startswith("***"):
+            self.token = f"***{self.token[-4:]}"
+
 
 class TELEGRAM_BOT_LIST_OUT_SCHEMA(BaseModel):
     items : List[TELEGRAM_BOT_RESPONSE_SCHEMA]

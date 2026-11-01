@@ -6,9 +6,9 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.customer import Customer, LoyaltyAccount, LoyaltyTransaction
+from app.models import Customer, LoyaltyAccount, LoyaltyTransaction
 from app.repositories.customer_repository import CustomerRepository
-from app.schemas.customer import CustomerCreate, CustomerUpdate
+from app.schemas.customer_schema import CUSTOMER_CREATE_SCHEMA, CUSTOMER_UPDATE_SCHEMA
 
 
 def calculate_tier(points_earned: int) -> str:
@@ -26,7 +26,7 @@ class CustomerService:
         self.db = db
         self.repo = CustomerRepository(db)
 
-    async def create_customer(self, data: CustomerCreate) -> Customer:
+    async def create_customer(self, data: CUSTOMER_CREATE_SCHEMA) -> Customer:
         code = await self.repo.next_customer_code()
         customer = Customer(
             customer_code=code,
@@ -53,7 +53,7 @@ class CustomerService:
         await self.db.refresh(customer)
         return await self.repo.get_with_loyalty(customer.id)  # type: ignore
 
-    async def update_customer(self, customer_id: UUID, data: CustomerUpdate) -> Customer:
+    async def update_customer(self, customer_id: UUID, data: CUSTOMER_UPDATE_SCHEMA) -> Customer:
         customer = await self.repo.get_by_id(customer_id)
         if not customer:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
@@ -90,6 +90,7 @@ class CustomerService:
         account = customer.loyalty_account
         if not account:
             account = LoyaltyAccount(customer_id=customer.id)
+            customer.loyalty_account = account
             self.db.add(account)
             await self.db.flush()
 
@@ -120,4 +121,75 @@ class CustomerService:
         self.db.add(tx)
         await self.db.commit()
         await self.db.refresh(account)
+        return account
+
+    async def award_sale_points(
+        self,
+        customer_id: UUID,
+        points: int,
+        sale_id: UUID,
+        invoice_number: str,
+    ) -> LoyaltyAccount | None:
+        if points <= 0:
+            return None
+        customer = await self.repo.get_with_loyalty(customer_id)
+        if not customer:
+            return None
+        account = customer.loyalty_account
+        if not account:
+            account = LoyaltyAccount(customer_id=customer.id)
+            customer.loyalty_account = account
+            self.db.add(account)
+            await self.db.flush()
+
+        account.points_balance += points
+        account.total_points_earned += points
+        account.tier = calculate_tier(account.total_points_earned)
+
+        tx = LoyaltyTransaction(
+            account_id=account.id,
+            transaction_type="EARN",
+            points=points,
+            reference_type="sale",
+            reference_id=sale_id,
+            note=f"Points earned from sale {invoice_number}",
+        )
+        self.db.add(tx)
+        await self.db.flush()
+        return account
+
+    async def clawback_points(
+        self,
+        customer_id: UUID,
+        points: int,
+        reference_type: str,
+        reference_id: UUID,
+        note: str,
+    ) -> LoyaltyAccount | None:
+        if points <= 0:
+            return None
+        customer = await self.repo.get_with_loyalty(customer_id)
+        if not customer:
+            return None
+        account = customer.loyalty_account
+        if not account:
+            account = LoyaltyAccount(customer_id=customer.id)
+            customer.loyalty_account = account
+            self.db.add(account)
+            await self.db.flush()
+
+        account.points_balance = max(0, account.points_balance - points)
+        account.total_points_earned = max(0, account.total_points_earned - points)
+        account.tier = calculate_tier(account.total_points_earned)
+
+        tx = LoyaltyTransaction(
+            account_id=account.id,
+            transaction_type="ADJUST",
+            points=-points,
+            reference_type=reference_type,
+            reference_id=reference_id,
+            note=note,
+        )
+        self.db.add(tx)
+        await self.db.flush()
         return account

@@ -4,7 +4,7 @@ Test: system_log inbound & outbound tracking via LOG_SERVICE.
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from app.models.track_model import SYSTEM_LOG_MODEL
+from app.models import SYSTEM_LOG_MODEL
 from app.services.log_service import LOG_SERVICE
 
 

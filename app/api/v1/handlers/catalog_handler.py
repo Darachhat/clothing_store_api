@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import require_permission
-from app.models.user import User
+from app.models import User
 from app.services.product_service import ProductService
 from app.repositories.product_repository import (
     BrandRepository,
@@ -18,22 +18,22 @@ from app.repositories.product_repository import (
     SizeRepository,
     SupplierRepository,
 )
-from app.schemas.product import (
-    BrandCreate,
-    BrandOut,
-    BrandUpdate,
-    CategoryCreate,
-    CategoryOut,
-    CategoryUpdate,
-    ColorCreate,
-    ColorOut,
-    ColorUpdate,
-    SizeCreate,
-    SizeOut,
-    SizeUpdate,
-    SupplierCreate,
-    SupplierOut,
-    SupplierUpdate,
+from app.schemas.product_schema import (
+    BRAND_CREATE_SCHEMA,
+    BRAND_RESPONSE_SCHEMA,
+    BRAND_UPDATE_SCHEMA,
+    CATEGORY_CREATE_SCHEMA,
+    CATEGORY_RESPONSE_SCHEMA,
+    CATEGORY_UPDATE_SCHEMA,
+    COLOR_CREATE_SCHEMA,
+    COLOR_RESPONSE_SCHEMA,
+    COLOR_UPDATE_SCHEMA,
+    SIZE_CREATE_SCHEMA,
+    SIZE_RESPONSE_SCHEMA,
+    SIZE_UPDATE_SCHEMA,
+    SUPPLIER_CREATE_SCHEMA,
+    SUPPLIER_RESPONSE_SCHEMA,
+    SUPPLIER_UPDATE_SCHEMA,
 )
 
 categories_router = APIRouter(prefix="/categories", tags=["Categories"])
@@ -44,7 +44,7 @@ suppliers_router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
 
 
 # ─── Categories ───────────────────────────────────────────────────────────────
-@categories_router.get("/", response_model=list[CategoryOut])
+@categories_router.get("/", response_model=list[CATEGORY_RESPONSE_SCHEMA])
 async def list_categories(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
@@ -55,12 +55,12 @@ async def list_categories(
     return await repo.get_all(skip=skip, limit=limit)
 
 
-@categories_router.post("/", response_model=CategoryOut, status_code=status.HTTP_201_CREATED)
+@categories_router.post("/", response_model=CATEGORY_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_category(
-    body: CategoryCreate,
+    body: CATEGORY_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.create")),
-) -> CategoryOut:
+) -> CATEGORY_RESPONSE_SCHEMA:
     repo = CategoryRepository(db)
     slug = body.slug or slugify(body.name)
     data = body.model_dump(exclude_unset=True)
@@ -71,12 +71,12 @@ async def create_category(
     return obj
 
 
-@categories_router.get("/{id}", response_model=CategoryOut)
+@categories_router.get("/{id}", response_model=CATEGORY_RESPONSE_SCHEMA)
 async def get_category(
     id: UUID,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.read")),
-) -> CategoryOut:
+) -> CATEGORY_RESPONSE_SCHEMA:
     repo = CategoryRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
@@ -84,14 +84,14 @@ async def get_category(
     return obj
 
 
-@categories_router.put("/{id}", response_model=CategoryOut)
-@categories_router.patch("/{id}", response_model=CategoryOut)
+@categories_router.put("/{id}", response_model=CATEGORY_RESPONSE_SCHEMA)
+@categories_router.patch("/{id}", response_model=CATEGORY_RESPONSE_SCHEMA)
 async def update_category(
     id: UUID,
-    body: CategoryUpdate,
+    body: CATEGORY_UPDATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.update")),
-) -> CategoryOut:
+) -> CATEGORY_RESPONSE_SCHEMA:
     repo = CategoryRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
@@ -122,7 +122,7 @@ async def delete_category(
 
 
 # ─── Colors ───────────────────────────────────────────────────────────────────
-@colors_router.get("/", response_model=list[ColorOut])
+@colors_router.get("/", response_model=list[COLOR_RESPONSE_SCHEMA])
 async def list_colors(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
@@ -133,24 +133,25 @@ async def list_colors(
     return await repo.get_all(skip=skip, limit=limit)
 
 
-@colors_router.post("/", response_model=ColorOut, status_code=status.HTTP_201_CREATED)
+@colors_router.post("/", response_model=COLOR_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_color(
-    body: ColorCreate,
+    body: COLOR_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.create")),
-) -> ColorOut:
+) -> COLOR_RESPONSE_SCHEMA:
     repo = ColorRepository(db)
     obj = await repo.create(**body.model_dump(exclude_unset=True))
+    await ProductService.increment_catalog_version(db)
     await db.commit()
     return obj
 
 
-@colors_router.get("/{id}", response_model=ColorOut)
+@colors_router.get("/{id}", response_model=COLOR_RESPONSE_SCHEMA)
 async def get_color(
     id: UUID,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.read")),
-) -> ColorOut:
+) -> COLOR_RESPONSE_SCHEMA:
     repo = ColorRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
@@ -158,19 +159,20 @@ async def get_color(
     return obj
 
 
-@colors_router.put("/{id}", response_model=ColorOut)
-@colors_router.patch("/{id}", response_model=ColorOut)
+@colors_router.put("/{id}", response_model=COLOR_RESPONSE_SCHEMA)
+@colors_router.patch("/{id}", response_model=COLOR_RESPONSE_SCHEMA)
 async def update_color(
     id: UUID,
-    body: ColorUpdate,
+    body: COLOR_UPDATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.update")),
-) -> ColorOut:
+) -> COLOR_RESPONSE_SCHEMA:
     repo = ColorRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Color not found")
     obj = await repo.update(obj, **body.model_dump(exclude_unset=True))
+    await ProductService.increment_catalog_version(db)
     await db.commit()
     return obj
 
@@ -186,12 +188,13 @@ async def delete_color(
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Color not found")
     await repo.delete(obj)
+    await ProductService.increment_catalog_version(db)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ─── Sizes ────────────────────────────────────────────────────────────────────
-@sizes_router.get("/", response_model=list[SizeOut])
+@sizes_router.get("/", response_model=list[SIZE_RESPONSE_SCHEMA])
 async def list_sizes(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
@@ -202,24 +205,25 @@ async def list_sizes(
     return await repo.get_all(skip=skip, limit=limit)
 
 
-@sizes_router.post("/", response_model=SizeOut, status_code=status.HTTP_201_CREATED)
+@sizes_router.post("/", response_model=SIZE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_size(
-    body: SizeCreate,
+    body: SIZE_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.create")),
-) -> SizeOut:
+) -> SIZE_RESPONSE_SCHEMA:
     repo = SizeRepository(db)
     obj = await repo.create(**body.model_dump(exclude_unset=True))
+    await ProductService.increment_catalog_version(db)
     await db.commit()
     return obj
 
 
-@sizes_router.get("/{id}", response_model=SizeOut)
+@sizes_router.get("/{id}", response_model=SIZE_RESPONSE_SCHEMA)
 async def get_size(
     id: UUID,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.read")),
-) -> SizeOut:
+) -> SIZE_RESPONSE_SCHEMA:
     repo = SizeRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
@@ -227,19 +231,20 @@ async def get_size(
     return obj
 
 
-@sizes_router.put("/{id}", response_model=SizeOut)
-@sizes_router.patch("/{id}", response_model=SizeOut)
+@sizes_router.put("/{id}", response_model=SIZE_RESPONSE_SCHEMA)
+@sizes_router.patch("/{id}", response_model=SIZE_RESPONSE_SCHEMA)
 async def update_size(
     id: UUID,
-    body: SizeUpdate,
+    body: SIZE_UPDATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.update")),
-) -> SizeOut:
+) -> SIZE_RESPONSE_SCHEMA:
     repo = SizeRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Size not found")
     obj = await repo.update(obj, **body.model_dump(exclude_unset=True))
+    await ProductService.increment_catalog_version(db)
     await db.commit()
     return obj
 
@@ -255,12 +260,13 @@ async def delete_size(
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Size not found")
     await repo.delete(obj)
+    await ProductService.increment_catalog_version(db)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ─── Brands ───────────────────────────────────────────────────────────────────
-@brands_router.get("/", response_model=list[BrandOut])
+@brands_router.get("/", response_model=list[BRAND_RESPONSE_SCHEMA])
 async def list_brands(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
@@ -271,12 +277,12 @@ async def list_brands(
     return await repo.get_all(skip=skip, limit=limit)
 
 
-@brands_router.post("/", response_model=BrandOut, status_code=status.HTTP_201_CREATED)
+@brands_router.post("/", response_model=BRAND_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_brand(
-    body: BrandCreate,
+    body: BRAND_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.create")),
-) -> BrandOut:
+) -> BRAND_RESPONSE_SCHEMA:
     repo = BrandRepository(db)
     slug = body.slug or slugify(body.name)
     data = body.model_dump(exclude_unset=True)
@@ -287,12 +293,12 @@ async def create_brand(
     return obj
 
 
-@brands_router.get("/{id}", response_model=BrandOut)
+@brands_router.get("/{id}", response_model=BRAND_RESPONSE_SCHEMA)
 async def get_brand(
     id: UUID,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.read")),
-) -> BrandOut:
+) -> BRAND_RESPONSE_SCHEMA:
     repo = BrandRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
@@ -300,14 +306,14 @@ async def get_brand(
     return obj
 
 
-@brands_router.put("/{id}", response_model=BrandOut)
-@brands_router.patch("/{id}", response_model=BrandOut)
+@brands_router.put("/{id}", response_model=BRAND_RESPONSE_SCHEMA)
+@brands_router.patch("/{id}", response_model=BRAND_RESPONSE_SCHEMA)
 async def update_brand(
     id: UUID,
-    body: BrandUpdate,
+    body: BRAND_UPDATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("product.update")),
-) -> BrandOut:
+) -> BRAND_RESPONSE_SCHEMA:
     repo = BrandRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
@@ -338,7 +344,7 @@ async def delete_brand(
 
 
 # ─── Suppliers ────────────────────────────────────────────────────────────────
-@suppliers_router.get("/", response_model=list[SupplierOut])
+@suppliers_router.get("/", response_model=list[SUPPLIER_RESPONSE_SCHEMA])
 async def list_suppliers(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
@@ -349,12 +355,12 @@ async def list_suppliers(
     return await repo.get_all(skip=skip, limit=limit)
 
 
-@suppliers_router.post("/", response_model=SupplierOut, status_code=status.HTTP_201_CREATED)
+@suppliers_router.post("/", response_model=SUPPLIER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_supplier(
-    body: SupplierCreate,
+    body: SUPPLIER_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("purchase.create")),
-) -> SupplierOut:
+) -> SUPPLIER_RESPONSE_SCHEMA:
     repo = SupplierRepository(db)
     code = await repo.next_supplier_code()
     data = body.model_dump(exclude_unset=True)
@@ -364,12 +370,12 @@ async def create_supplier(
     return obj
 
 
-@suppliers_router.get("/{id}", response_model=SupplierOut)
+@suppliers_router.get("/{id}", response_model=SUPPLIER_RESPONSE_SCHEMA)
 async def get_supplier(
     id: UUID,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("purchase.read")),
-) -> SupplierOut:
+) -> SUPPLIER_RESPONSE_SCHEMA:
     repo = SupplierRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
@@ -377,14 +383,14 @@ async def get_supplier(
     return obj
 
 
-@suppliers_router.put("/{id}", response_model=SupplierOut)
-@suppliers_router.patch("/{id}", response_model=SupplierOut)
+@suppliers_router.put("/{id}", response_model=SUPPLIER_RESPONSE_SCHEMA)
+@suppliers_router.patch("/{id}", response_model=SUPPLIER_RESPONSE_SCHEMA)
 async def update_supplier(
     id: UUID,
-    body: SupplierUpdate,
+    body: SUPPLIER_UPDATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("purchase.create")),
-) -> SupplierOut:
+) -> SUPPLIER_RESPONSE_SCHEMA:
     repo = SupplierRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:

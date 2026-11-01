@@ -1,12 +1,12 @@
-from app.models.auth_model import (
+from app.models import (
     CREDENTIAL_BASIC_MODEL
     , SYSTEM_CREDENTIAL_MODEL
     , SYSTEM_ENDPOINT_MODEL
     , SYSTEM_MODEL
     , TELEGRAM_BOT_MODEL
 )
-from app.models.base_data_model import AUTH_TYPE_MODEL, STATUS_MODEL
-from app.models.track_model import SYSTEM_LOG_MODEL
+from app.models import AUTH_TYPE_MODEL, STATUS_MODEL
+from app.models import SYSTEM_LOG_MODEL
 
 
 def test_system_and_credential_model_persistence(db_session):

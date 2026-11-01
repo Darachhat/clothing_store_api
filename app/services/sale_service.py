@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.sale import Return, ReturnItem, ReturnPayment, Sale, SaleItem, SalePayment
+from app.models import Return, ReturnItem, ReturnPayment, Sale, SaleItem, SalePayment
 from app.repositories.inventory_repository import InventoryStockRepository
 from app.repositories.product_repository import ProductVariantRepository
 from app.utils.generators import generate_invoice_number, generate_return_number
@@ -33,7 +33,7 @@ class SaleService:
     ) -> Sale:
         """Create a sale and reduce stock atomically."""
         from sqlalchemy import select
-        from app.models.branch import Branch, Warehouse
+        from app.models import Branch, Warehouse
 
         if not branch_id or not warehouse_id:
             if not branch_id:
@@ -77,13 +77,24 @@ class SaleService:
                 )
 
             qty = item_data["quantity"]
-            unit_price = item_data.get("unit_price")
-            if unit_price is None:
-                unit_price = variant.selling_price
+            if qty <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Quantity must be greater than zero",
+                )
+            # Price is always taken from the catalog; client-supplied unit_price is ignored
+            # so a modified client cannot sell below the real price.
+            unit_price = variant.selling_price
+            gross = unit_price * qty
             item_discount = item_data.get("discount_amount")
             if item_discount is None:
                 item_discount = Decimal("0")
-            item_subtotal = (unit_price * qty) - item_discount
+            if item_discount < 0 or item_discount > gross:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid line discount",
+                )
+            item_subtotal = gross - item_discount
             subtotal += item_subtotal
 
             sale_items.append(
@@ -97,6 +108,16 @@ class SaleService:
                 }
             )
 
+        if discount_amount < 0 or discount_amount > subtotal:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid order discount",
+            )
+        if tax_amount < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid tax amount",
+            )
         total = subtotal - discount_amount + tax_amount
 
         sale = Sale(
@@ -165,6 +186,34 @@ class SaleService:
         else:
             sale.payment_status = "PARTIAL"
 
+        # Award loyalty points if customer is linked and sale is paid
+        if sale.customer_id and sale.payment_status == "PAID":
+            from app.services.customer_service import CustomerService
+
+            cust_svc = CustomerService(self.db)
+            points_to_earn = int(sale.total)
+            if points_to_earn > 0:
+                await cust_svc.award_sale_points(
+                    customer_id=sale.customer_id,
+                    points=points_to_earn,
+                    sale_id=sale.id,
+                    invoice_number=sale.invoice_number,
+                )
+
+        from app.services.audit_service import AuditService
+
+        await AuditService.record(
+            self.db,
+            action="SALE_COMPLETED",
+            entity_type="sale",
+            entity_id=sale.id,
+            user_id=sale.cashier_id,
+            new_data={
+                "invoice_number": sale.invoice_number,
+                "total": str(sale.total),
+                "payment_status": sale.payment_status,
+            },
+        )
         await self.db.flush()
         return sale
 
@@ -189,7 +238,34 @@ class SaleService:
                     created_by=cancelled_by,
                 )
 
+        prev_status = sale.sale_status
         sale.sale_status = "CANCELLED"
+
+        if prev_status == "COMPLETED" and sale.customer_id:
+            from app.services.customer_service import CustomerService
+
+            cust_svc = CustomerService(self.db)
+            points_to_claw = int(sale.total)
+            if points_to_claw > 0:
+                await cust_svc.clawback_points(
+                    customer_id=sale.customer_id,
+                    points=points_to_claw,
+                    reference_type="sale_cancel",
+                    reference_id=sale.id,
+                    note=f"Points clawback from cancelled sale {sale.invoice_number}",
+                )
+
+        from app.services.audit_service import AuditService
+
+        await AuditService.record(
+            self.db,
+            action="SALE_CANCELLED",
+            entity_type="sale",
+            entity_id=sale.id,
+            user_id=cancelled_by,
+            old_data={"sale_status": prev_status},
+            new_data={"sale_status": "CANCELLED", "invoice_number": sale.invoice_number},
+        )
         await self.db.flush()
         return sale
 
@@ -203,12 +279,33 @@ class SaleService:
         processed_by: UUID,
     ) -> Return:
         """Process a return/refund with inventory restoration."""
+        from sqlalchemy import func, select
+
+        if original_sale.sale_status not in ("COMPLETED", "RETURNED"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot return a sale in status: {original_sale.sale_status}",
+            )
+
         return_number = await generate_return_number(self.db)
+
+        # Quantity already returned per sale item (completed returns only)
+        returned_rows = await self.db.execute(
+            select(ReturnItem.sale_item_id, func.coalesce(func.sum(ReturnItem.quantity), 0))
+            .join(Return, ReturnItem.return_id == Return.id)
+            .where(
+                Return.original_sale_id == original_sale.id,
+                Return.status == "COMPLETED",
+            )
+            .group_by(ReturnItem.sale_item_id)
+        )
+        already_returned = {row[0]: int(row[1]) for row in returned_rows.all()}
 
         # Validate items and compute total_refund from the actual sale item prices
         sale_item_map = {item.id: item for item in original_sale.items}
         validated: list[dict] = []
         total_refund = Decimal("0")
+        requested: dict = {}
         for item_data in return_items_data:
             sale_item_id = item_data["sale_item_id"]
             sale_item = sale_item_map.get(sale_item_id)
@@ -218,6 +315,17 @@ class SaleService:
                     detail=f"Sale item {sale_item_id} not found in original sale",
                 )
             qty = item_data["quantity"]
+            if qty <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Return quantity must be greater than zero",
+                )
+            requested[sale_item_id] = requested.get(sale_item_id, 0) + qty
+            if requested[sale_item_id] + already_returned.get(sale_item_id, 0) > sale_item.quantity:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Return quantity exceeds quantity sold for item {sale_item_id}",
+                )
             total_refund += sale_item.unit_price * qty
             validated.append({"sale_item": sale_item, "quantity": qty})
 
@@ -269,9 +377,46 @@ class SaleService:
             self.db.add(rp_obj)
 
         ret.status = "COMPLETED"
-        original_sale.payment_status = "REFUNDED"
-        if return_type == "FULL":
+        # Fully refunded only when every sold unit has been returned
+        for sid, q in requested.items():
+            already_returned[sid] = already_returned.get(sid, 0) + q
+        fully_returned = all(
+            already_returned.get(i.id, 0) >= i.quantity for i in original_sale.items
+        )
+        if fully_returned:
+            original_sale.payment_status = "REFUNDED"
             original_sale.sale_status = "RETURNED"
+        else:
+            original_sale.payment_status = "PARTIALLY_REFUNDED"
 
+        if original_sale.customer_id and total_refund > Decimal("0"):
+            from app.services.customer_service import CustomerService
+
+            cust_svc = CustomerService(self.db)
+            points_to_claw = int(total_refund)
+            if points_to_claw > 0:
+                await cust_svc.clawback_points(
+                    customer_id=original_sale.customer_id,
+                    points=points_to_claw,
+                    reference_type="sale_return",
+                    reference_id=ret.id,
+                    note=f"Points clawback from return {ret.return_number} of sale {original_sale.invoice_number}",
+                )
+
+        from app.services.audit_service import AuditService
+
+        await AuditService.record(
+            self.db,
+            action="SALE_RETURN_PROCESSED",
+            entity_type="return",
+            entity_id=ret.id,
+            user_id=processed_by,
+            new_data={
+                "return_number": ret.return_number,
+                "original_sale_id": str(original_sale.id),
+                "return_type": return_type,
+                "total_refund": str(total_refund),
+            },
+        )
         await self.db.flush()
         return ret

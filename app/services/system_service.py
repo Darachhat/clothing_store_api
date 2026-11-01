@@ -3,11 +3,13 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.enum.common_enum import AUTH_TYPE_ENUM, TRAFFIC_TYPE_ENUM
 from app.core.exceptions import CONFLICT_EXCEPTION, NOT_FOUND_EXCEPTION
 from app.core.utils.crypto_utils import build_basic_auth
 from app.core.utils.http_client import HTTP_CLIENT
-from app.models.auth_model import (
+from app.services.system_auth_service import generate_secret, hash_inbound_secret
+from app.models import (
     CREDENTIAL_API_KEY_MODEL
     , CREDENTIAL_BASIC_MODEL
     , CREDENTIAL_BEARER_MODEL
@@ -328,8 +330,45 @@ class SYSTEM_SERVICE:
         )
         db.add(cred)
 
-        auth_type = data.auth_type_code.lower()
-        if auth_type == AUTH_TYPE_ENUM.BASIC.value and data.username and data.password is not None:
+        auth_type        = data.auth_type_code.lower()
+        generated_secret : Optional[str] = None
+        header_value     : Optional[str] = None
+
+        # Inbound secrets are server-generated and stored hashed; the clear value is returned once.
+        if (
+            data.traffic_type == TRAFFIC_TYPE_ENUM.INBOUND.value
+            and auth_type in (AUTH_TYPE_ENUM.BASIC.value, AUTH_TYPE_ENUM.BEARER.value)
+        ):
+            generated_secret = generate_secret()
+            if auth_type == AUTH_TYPE_ENUM.BASIC.value:
+                username = data.username or data.system_code
+                db.add(
+                    CREDENTIAL_BASIC_MODEL(
+                        system_code    = data.system_code
+                        , traffic_type = data.traffic_type
+                        , username     = username
+                        , password     = hash_inbound_secret(generated_secret)
+                        , description  = data.description
+                        , status_code  = data.status_code
+                        , created_by   = "admin"
+                    )
+                )
+                header_value = build_basic_auth(username, generated_secret)
+            else:
+                db.add(
+                    CREDENTIAL_BEARER_MODEL(
+                        system_code    = data.system_code
+                        , traffic_type = data.traffic_type
+                        , header_name  = settings.SYSTEM_AUTH_HEADER_NAME
+                        , token_prefix = "Bearer"
+                        , token_value  = hash_inbound_secret(generated_secret)
+                        , description  = data.description
+                        , status_code  = data.status_code
+                        , created_by   = "admin"
+                    )
+                )
+                header_value = f"Bearer {generated_secret}"
+        elif auth_type == AUTH_TYPE_ENUM.BASIC.value and data.username and data.password is not None:
             db.add(
                 CREDENTIAL_BASIC_MODEL(
                     system_code    = data.system_code
@@ -386,7 +425,10 @@ class SYSTEM_SERVICE:
 
         db.commit()
         db.refresh(cred)
-        return SYSTEM_CREDENTIAL_RESPONSE_SCHEMA.model_validate(cred)
+        response = SYSTEM_CREDENTIAL_RESPONSE_SCHEMA.model_validate(cred)
+        response.generated_secret           = generated_secret
+        response.authorization_header_value = header_value
+        return response
 
     @staticmethod
     def build_outbound_auth(

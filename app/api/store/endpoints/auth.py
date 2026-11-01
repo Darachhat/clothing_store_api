@@ -13,18 +13,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.store.auth import require_customer
 from app.core.database import get_db
-from app.models.user import User
-from app.schemas.auth import LoginRequest, LoginResponse, RefreshRequest, TokenResponse
+from app.models import User
+from app.schemas.auth_schema import LOGIN_REQUEST_SCHEMA, LOGIN_RESPONSE_SCHEMA, REFRESH_REQUEST_SCHEMA, TOKEN_RESPONSE_SCHEMA
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Store Auth"])
 
 
 class CustomerRegisterRequest(BaseModel):
-    username: str
+    username: str | None = None
     email: EmailStr
     full_name: str
     password: str
+    phone: str | None = None
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -36,14 +37,20 @@ async def register_customer(
     from app.core.security import hash_password
     from app.repositories.user_repository import UserRepository
     from sqlalchemy import select
-    from app.models.user import User, Role
+    from app.models import User, Role
 
     repo = UserRepository(db)
 
+    normalized_email = body.email.lower().strip()
+    resolved_username = (body.username or normalized_email).strip()
+
     # Check username/email uniqueness
-    existing = await repo.get_by_username(body.username)
+    existing = await repo.get_by_username(resolved_username)
     if existing:
-        raise HTTPException(status_code=400, detail="Username already taken.")
+        raise HTTPException(status_code=400, detail="Username or email already taken.")
+
+    if await repo.email_exists(normalized_email):
+        raise HTTPException(status_code=400, detail="Email already registered.")
 
     # Get or create CUSTOMER role
     result = await db.execute(select(Role).where(Role.name == "CUSTOMER"))
@@ -54,8 +61,8 @@ async def register_customer(
         await db.flush()
 
     new_user = User(
-        username=body.username,
-        email=body.email,
+        username=resolved_username,
+        email=normalized_email,
         full_name=body.full_name,
         hashed_password=hash_password(body.password),
         status="ACTIVE",
@@ -68,41 +75,38 @@ async def register_customer(
     return {"message": "Account created successfully.", "user_id": str(new_user.id)}
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=LOGIN_RESPONSE_SCHEMA)
 async def customer_login(
-    body: LoginRequest,
+    body: LOGIN_REQUEST_SCHEMA,
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> LoginResponse:
+) -> LOGIN_RESPONSE_SCHEMA:
     """Customer login — returns JWT access + refresh tokens."""
+    from app.repositories.user_repository import UserRepository
+
+    repo = UserRepository(db)
+    pre_user = await repo.get_by_username(body.username)
+    if pre_user:
+        role_names = {r.name for r in pre_user.roles}
+        if "CUSTOMER" not in role_names:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This endpoint is for customer accounts only.",
+            )
+
     service = AuthService(db)
     result = await service.login(body.username, body.password, request)
-    # Verify the logged-in user is actually a customer
-    from app.repositories.user_repository import UserRepository
-    from uuid import UUID
-    from app.core.security import verify_access_token
-    payload = verify_access_token(result["access_token"])
-    if payload:
-        repo = UserRepository(db)
-        user = await repo.get_by_id(UUID(payload["sub"]))
-        if user:
-            role_names = {r.name for r in user.roles}
-            if "CUSTOMER" not in role_names:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="This endpoint is for customer accounts only.",
-                )
-    return LoginResponse(**result)
+    return LOGIN_RESPONSE_SCHEMA(**result)
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=TOKEN_RESPONSE_SCHEMA)
 async def customer_refresh(
-    body: RefreshRequest,
+    body: REFRESH_REQUEST_SCHEMA,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> TokenResponse:
+) -> TOKEN_RESPONSE_SCHEMA:
     service = AuthService(db)
     result = await service.refresh(body.refresh_token)
-    return TokenResponse(**result)
+    return TOKEN_RESPONSE_SCHEMA(**result)
 
 
 @router.get("/me")

@@ -4,10 +4,10 @@ import asyncio
 from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
-from app.models.branch import Warehouse
-from app.models.customer import Customer, LoyaltyAccount
-from app.models.inventory import InventoryStock
-from app.models.product import ProductVariant
+from app.models import Warehouse
+from app.models import Customer, LoyaltyAccount
+from app.models import InventoryStock
+from app.models import ProductVariant
 
 
 async def main():

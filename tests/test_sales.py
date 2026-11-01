@@ -8,9 +8,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
-from app.models.branch import Branch, Warehouse
-from app.models.product import Brand, Category, Color, Product, ProductVariant, Size
-from app.models.user import Permission, Role, User
+from app.models import Branch, Warehouse
+from app.models import Brand, Category, Color, Product, ProductVariant, Size
+from app.models import Permission, Role, User
 from app.repositories.inventory_repository import InventoryStockRepository
 from app.services.inventory_service import InventoryService
 from app.services.sale_service import SaleService
@@ -146,7 +146,7 @@ async def test_create_and_complete_sale(db: AsyncSession) -> None:
     # Complete the sale
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
-    from app.models.sale import Sale as SaleModel
+    from app.models import Sale as SaleModel
 
     res = await db.execute(
         select(SaleModel).where(SaleModel.id == sale.id).options(selectinload(SaleModel.items))
@@ -176,7 +176,7 @@ async def test_cancel_completed_sale_restores_stock(db: AsyncSession) -> None:
 
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
-    from app.models.sale import Sale as SaleModel
+    from app.models import Sale as SaleModel
 
     sale = await service.create_sale(
         branch_id=infra["branch"].id,
@@ -222,7 +222,7 @@ async def test_partial_payment_sets_partial_status(db: AsyncSession) -> None:
 
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
-    from app.models.sale import Sale as SaleModel
+    from app.models import Sale as SaleModel
 
     sale = await service.create_sale(
         branch_id=infra["branch"].id,
@@ -263,7 +263,7 @@ async def test_return_restores_stock(db: AsyncSession) -> None:
 
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
-    from app.models.sale import Sale as SaleModel
+    from app.models import Sale as SaleModel
 
     sale = await service.create_sale(
         branch_id=infra["branch"].id,
@@ -325,7 +325,7 @@ async def test_cannot_double_complete_sale(db: AsyncSession) -> None:
 
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
-    from app.models.sale import Sale as SaleModel
+    from app.models import Sale as SaleModel
 
     sale = await service.create_sale(
         branch_id=infra["branch"].id,
@@ -400,3 +400,239 @@ async def test_sale_api_via_http(client: AsyncClient, db: AsyncSession) -> None:
     list_resp = await client.get("/api/v1/sales/", headers=headers)
     assert list_resp.status_code == 200
     assert len(list_resp.json()) >= 1
+
+
+# ── Server-side pricing / discount validation ────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_create_sale_ignores_client_unit_price(db: AsyncSession) -> None:
+    """A client-supplied unit_price must not override the catalog selling price."""
+    infra = await create_sale_test_infra(db)
+    sale = await SaleService(db).create_sale(
+        branch_id=infra["branch"].id,
+        warehouse_id=infra["warehouse"].id,
+        cashier_id=infra["user"].id,
+        items_data=[
+            {
+                "variant_id": infra["variant"].id,
+                "quantity": 2,
+                "unit_price": Decimal("0.01"),
+                "discount_amount": Decimal("0"),
+            }
+        ],
+    )
+    assert sale.items[0].unit_price == Decimal("20.00")
+    assert sale.total == Decimal("40.00")
+
+
+@pytest.mark.asyncio
+async def test_line_discount_is_not_double_counted(db: AsyncSession) -> None:
+    """Line discount reduces the total once; order discount is separate."""
+    infra = await create_sale_test_infra(db)
+    sale = await SaleService(db).create_sale(
+        branch_id=infra["branch"].id,
+        warehouse_id=infra["warehouse"].id,
+        cashier_id=infra["user"].id,
+        items_data=[
+            {
+                "variant_id": infra["variant"].id,
+                "quantity": 2,
+                "discount_amount": Decimal("5.00"),
+            }
+        ],
+        discount_amount=Decimal("3.00"),
+    )
+    # 2 * 20 - 5 (line) - 3 (order) = 32
+    assert sale.subtotal == Decimal("35.00")
+    assert sale.total == Decimal("32.00")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "line_discount,order_discount,tax,qty",
+    [
+        (Decimal("-1"), Decimal("0"), Decimal("0"), 1),
+        (Decimal("21"), Decimal("0"), Decimal("0"), 1),
+        (Decimal("0"), Decimal("21"), Decimal("0"), 1),
+        (Decimal("0"), Decimal("0"), Decimal("-1"), 1),
+        (Decimal("0"), Decimal("0"), Decimal("0"), 0),
+    ],
+)
+async def test_create_sale_rejects_invalid_amounts(
+    db: AsyncSession, line_discount, order_discount, tax, qty
+) -> None:
+    from fastapi import HTTPException
+
+    infra = await create_sale_test_infra(db)
+    with pytest.raises(HTTPException) as exc:
+        await SaleService(db).create_sale(
+            branch_id=infra["branch"].id,
+            warehouse_id=infra["warehouse"].id,
+            cashier_id=infra["user"].id,
+            items_data=[
+                {
+                    "variant_id": infra["variant"].id,
+                    "quantity": qty,
+                    "discount_amount": line_discount,
+                }
+            ],
+            discount_amount=order_discount,
+            tax_amount=tax,
+        )
+    assert exc.value.status_code == 400
+
+
+# ── Return validation ────────────────────────────────────────────────────────
+
+
+async def _completed_sale(db: AsyncSession, infra, qty: int):
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from app.models import Sale as SaleModel
+
+    service = SaleService(db)
+    sale = await service.create_sale(
+        branch_id=infra["branch"].id,
+        warehouse_id=infra["warehouse"].id,
+        cashier_id=infra["user"].id,
+        items_data=[{"variant_id": infra["variant"].id, "quantity": qty}],
+    )
+    await db.commit()
+    res = await db.execute(
+        select(SaleModel).where(SaleModel.id == sale.id).options(selectinload(SaleModel.items))
+    )
+    loaded = res.scalar_one()
+    await service.complete_sale(
+        loaded, [{"payment_method": "CASH", "amount": Decimal(20) * qty}]
+    )
+    await db.commit()
+    res = await db.execute(
+        select(SaleModel).where(SaleModel.id == sale.id).options(selectinload(SaleModel.items))
+    )
+    return service, res.scalar_one()
+
+
+@pytest.mark.asyncio
+async def test_partial_return_keeps_sale_partially_refunded(db: AsyncSession) -> None:
+    infra = await create_sale_test_infra(db)
+    service, sale = await _completed_sale(db, infra, 2)
+    item = sale.items[0]
+
+    await service.process_return(
+        original_sale=sale,
+        return_items_data=[{"sale_item_id": item.id, "quantity": 1}],
+        refund_payments=[{"payment_method": "CASH", "amount": Decimal("20.00")}],
+        return_type="PARTIAL",
+        reason=None,
+        processed_by=infra["user"].id,
+    )
+    await db.commit()
+    assert sale.payment_status == "PARTIALLY_REFUNDED"
+    assert sale.sale_status == "COMPLETED"
+
+    # Returning the remaining unit completes the refund
+    await service.process_return(
+        original_sale=sale,
+        return_items_data=[{"sale_item_id": item.id, "quantity": 1}],
+        refund_payments=[{"payment_method": "CASH", "amount": Decimal("20.00")}],
+        return_type="PARTIAL",
+        reason=None,
+        processed_by=infra["user"].id,
+    )
+    await db.commit()
+    assert sale.payment_status == "REFUNDED"
+    assert sale.sale_status == "RETURNED"
+
+
+@pytest.mark.asyncio
+async def test_return_cannot_exceed_quantity_sold(db: AsyncSession) -> None:
+    from fastapi import HTTPException
+
+    infra = await create_sale_test_infra(db)
+    service, sale = await _completed_sale(db, infra, 2)
+    item = sale.items[0]
+
+    with pytest.raises(HTTPException) as exc:
+        await service.process_return(
+            original_sale=sale,
+            return_items_data=[{"sale_item_id": item.id, "quantity": 3}],
+            refund_payments=[],
+            return_type="PARTIAL",
+            reason=None,
+            processed_by=infra["user"].id,
+        )
+    assert exc.value.status_code == 400
+
+    # Stock must be unchanged by the rejected return (50 - 2 sold)
+    stock = await InventoryStockRepository(db).get_stock(
+        infra["variant"].id, infra["warehouse"].id
+    )
+    assert stock.quantity == 48
+
+
+@pytest.mark.asyncio
+async def test_loyalty_points_earned_and_clawed_back(db: AsyncSession) -> None:
+    from app.models import Customer
+    from app.models import Sale as SaleModel
+    from app.services.customer_service import CustomerService
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    infra = await create_sale_test_infra(db)
+    cust = Customer(
+        customer_code="CUST-LOYAL-1",
+        name="Loyalty Tester",
+        phone="099887766",
+        status="ACTIVE",
+    )
+    db.add(cust)
+    await db.flush()
+
+    service = SaleService(db)
+    sale = await service.create_sale(
+        branch_id=infra["branch"].id,
+        warehouse_id=infra["warehouse"].id,
+        cashier_id=infra["user"].id,
+        customer_id=cust.id,
+        items_data=[
+            {
+                "variant_id": infra["variant"].id,
+                "quantity": 2,
+                "unit_price": Decimal("20.00"),
+                "discount_amount": Decimal("0"),
+            }
+        ],
+    )
+    # Total is 40.00 (selling_price=20.00 * 2)
+    sale = await service.complete_sale(
+        sale, [{"payment_method": "CASH", "amount": Decimal("40.00")}]
+    )
+    await db.commit()
+
+    cust_svc = CustomerService(db)
+    cust_loaded = await cust_svc.get_customer(cust.id)
+    assert cust_loaded.loyalty_account is not None
+    assert cust_loaded.loyalty_account.points_balance == 40
+    assert cust_loaded.loyalty_account.total_points_earned == 40
+
+    # Process partial return of 1 unit ($20 refund)
+    res = await db.execute(
+        select(SaleModel).where(SaleModel.id == sale.id).options(selectinload(SaleModel.items))
+    )
+    sale_to_return = res.scalar_one()
+    item = sale_to_return.items[0]
+
+    await service.process_return(
+        original_sale=sale_to_return,
+        return_items_data=[{"sale_item_id": item.id, "quantity": 1}],
+        refund_payments=[{"payment_method": "CASH", "amount": Decimal("20.00")}],
+        return_type="PARTIAL",
+        reason="Partial return",
+        processed_by=infra["user"].id,
+    )
+    await db.commit()
+
+    cust_loaded = await cust_svc.get_customer(cust.id)
+    assert cust_loaded.loyalty_account.points_balance == 20
+    assert cust_loaded.loyalty_account.total_points_earned == 20

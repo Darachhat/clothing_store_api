@@ -7,8 +7,8 @@ from app.core.constants import HTTP_TIMEOUT_SECONDS, TELEGRAM_API_BASE_URL
 from app.core.database import get_static_session
 from app.core.logger import logger
 from app.core.utils.http_client import HTTP_CLIENT
-from app.models.auth_model import TELEGRAM_BOT_MODEL, TELEGRAM_CHAT_MODEL
-from app.models.track_model import TELEGRAM_OUTBOUND_MODEL
+from app.models import TELEGRAM_BOT_MODEL, TELEGRAM_CHAT_MODEL
+from app.models import TELEGRAM_OUTBOUND_MODEL
 
 
 @dataclass

@@ -8,10 +8,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
-from app.models.branch import Branch
-from app.models.misc import ExpenseCategory, Promotion
-from app.models.user import Role, User
-from app.schemas.expense import ExpenseCreate
+from app.models import Branch
+from app.models import ExpenseCategory, Promotion
+from app.models import Role, User
+from app.schemas.expense_schema import EXPENSE_CREATE_SCHEMA
 from app.services.misc_service import ExpenseService, PromotionService
 
 
@@ -37,7 +37,7 @@ async def test_expense_lifecycle(db: AsyncSession):
     await db.flush()
 
     service = ExpenseService(db)
-    exp_in = ExpenseCreate(
+    exp_in = EXPENSE_CREATE_SCHEMA(
         category_id=category.id,
         branch_id=branch.id,
         amount=Decimal("150.00"),

@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.purchase import GoodsReceipt, PurchaseOrder
+from app.models import GoodsReceipt, PurchaseOrder
 from app.repositories.base import BaseRepository
 
 

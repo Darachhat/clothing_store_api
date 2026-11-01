@@ -16,10 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.redis import get_redis_client, redis_get, redis_set
 from app.core.security import create_access_token, hash_password
-from app.models.branch import Branch, Warehouse
-from app.models.inventory import InventoryStock
-from app.models.product import Brand, Category, Color, Product, ProductVariant, Size, Supplier
-from app.models.user import Permission, Role, User
+from app.models import Branch, Warehouse
+from app.models import InventoryStock
+from app.models import Brand, Category, Color, Product, ProductVariant, Size, Supplier
+from app.models import Permission, Role, User
 from app.repositories.product_repository import ProductRepository
 from app.services.product_cache_service import ProductCacheService
 
@@ -136,7 +136,7 @@ async def setup_test_catalog(db: AsyncSession) -> dict:
         products.append(p)
 
     # 8. Seed CatalogVersion (id=1)
-    from app.models.product import CatalogVersion
+    from app.models import CatalogVersion
     stmt_cv = select(CatalogVersion).where(CatalogVersion.id == 1)
     res_cv = await db.execute(stmt_cv)
     if res_cv.scalar_one_or_none() is None:
@@ -639,7 +639,7 @@ async def test_include_variants_returns_variant_data(client: AsyncClient, db: As
 async def test_include_variants_false_returns_product_without_variants(
     client: AsyncClient, db: AsyncSession
 ) -> None:
-    """Phase 8: include_variants=false (default) returns standard ProductOut without variants list."""
+    """Phase 8: include_variants=false (default) returns standard PRODUCT_RESPONSE_SCHEMA without variants list."""
     data = await setup_test_catalog(db)
     headers = data["headers"]
 
@@ -648,7 +648,7 @@ async def test_include_variants_false_returns_product_without_variants(
     body = resp.json()
     assert len(body["items"]) > 0
     for item in body["items"]:
-        # ProductOut does not include a nested variants list
+        # PRODUCT_RESPONSE_SCHEMA does not include a nested variants list
         assert "sku" not in item  # sku is a variant field, not a product field
 
 

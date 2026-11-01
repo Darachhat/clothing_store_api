@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends
 from app.api.cashier.auth import require_cashier
 from app.api.cashier.payments import router as payments_router
 from app.api.v1.endpoints.auth import router as auth_router
-from app.api.v1.endpoints.branches import router as branches_router
+from app.api.v1.endpoints.branches import router as branches_router, warehouses_router
 from app.api.v1.endpoints.catalog import (
     brands_router,
     categories_router,
@@ -51,6 +51,7 @@ _protected.include_router(colors_router)
 _protected.include_router(sizes_router)
 _protected.include_router(inventory_router)
 _protected.include_router(branches_router)
+_protected.include_router(warehouses_router)
 _protected.include_router(sales_router)
 _protected.include_router(returns_router)
 _protected.include_router(customers_router)

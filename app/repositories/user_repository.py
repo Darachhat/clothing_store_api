@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.models.user import RefreshToken, Role, User
+from app.models import RefreshToken, Role, User
 from app.repositories.base import BaseRepository
 
 
@@ -119,11 +119,11 @@ class RoleRepository(BaseRepository[Role]):
 
 class PermissionRepository(BaseRepository):
     def __init__(self, db) -> None:
-        from app.models.user import Permission
+        from app.models import Permission
         super().__init__(Permission, db)
 
     async def get_all_permissions(self):
-        from app.models.user import Permission
+        from app.models import Permission
         stmt = select(Permission).order_by(Permission.module, Permission.code)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())

@@ -50,6 +50,10 @@ celery_app.conf.update(
             "task"      : "app.tasks.payment_tasks.reconcile_pending_payments"
             , "schedule" : 60
         }
+        , "cleanup-expired-tokens": {
+            "task"      : "app.tasks.inventory_tasks.cleanup_expired_tokens"
+            , "schedule" : 60 * 60 * 6
+        }
     }
 )
 

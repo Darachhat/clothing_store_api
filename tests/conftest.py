@@ -23,8 +23,25 @@ from app.main import app
 
 # Disable external background audit side-effects unless explicitly tested
 settings.ENV                     = "testing"
+settings.ENVIRONMENT             = "testing"
 settings.ENABLE_ACCESS_AUDIT_LOG = False
+# The inbound system-credential gate is exercised explicitly in tests/test_system_gate.py.
+settings.SYSTEM_AUTH_MODE        = "off"
 
+from app.core.celery_app import celery_app
+
+celery_app.conf.update(
+    task_always_eager=True,
+    task_eager_propagates=False,
+    broker_url="memory://",
+    result_backend="rpc://",
+)
+
+
+import sqlite3
+import uuid
+
+sqlite3.register_adapter(uuid.UUID, str)
 
 @compiles(UUID, "sqlite")
 def compile_uuid_sqlite(type_, compiler, **kw):
@@ -56,6 +73,7 @@ SyncTestingSessionLocal = sessionmaker(
 def attach_sync_sqlite_schemas(dbapi_connection, connection_record):
     dbapi_connection.execute("ATTACH DATABASE ':memory:' AS auth")
     dbapi_connection.execute("ATTACH DATABASE ':memory:' AS base_data")
+    dbapi_connection.execute("ATTACH DATABASE ':memory:' AS data")
     dbapi_connection.execute("ATTACH DATABASE ':memory:' AS track")
     dbapi_connection.execute("ATTACH DATABASE ':memory:' AS public")
 
@@ -81,6 +99,7 @@ TestSessionLocal = async_sessionmaker(
 def attach_async_sqlite_schemas(dbapi_connection, connection_record):
     dbapi_connection.execute("ATTACH DATABASE ':memory:' AS auth")
     dbapi_connection.execute("ATTACH DATABASE ':memory:' AS base_data")
+    dbapi_connection.execute("ATTACH DATABASE ':memory:' AS data")
     dbapi_connection.execute("ATTACH DATABASE ':memory:' AS track")
     dbapi_connection.execute("ATTACH DATABASE ':memory:' AS public")
 
@@ -90,6 +109,12 @@ def setup_sync_test_db():
     Base.metadata.create_all(bind=sync_test_engine)
     yield
     Base.metadata.drop_all(bind=sync_test_engine)
+    sync_test_engine.dispose()
+    try:
+        import asyncio
+        asyncio.run(test_engine.dispose())
+    except Exception:
+        pass
 
 
 @pytest.fixture
@@ -111,6 +136,7 @@ async def db() -> AsyncGenerator[AsyncSession, None]:
         yield session
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    await test_engine.dispose()
 
 
 class _NoCloseSessionProxy:
@@ -121,6 +147,16 @@ class _NoCloseSessionProxy:
         if name == "close":
             return lambda: None
         return getattr(self._session, name)
+
+
+@pytest.fixture
+def allow_system_admin():
+    """Bypass the `settings.manage` guard on system/telegram/log/client-management routes."""
+    from app.core.deps import require_system_admin
+
+    app.dependency_overrides[require_system_admin] = lambda: None
+    yield
+    app.dependency_overrides.pop(require_system_admin, None)
 
 
 @pytest.fixture

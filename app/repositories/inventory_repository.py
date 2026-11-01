@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from app.models.inventory import InventoryMovement, InventoryStock
+from app.models import InventoryMovement, InventoryStock
 from app.repositories.base import BaseRepository
 
 

@@ -3,23 +3,23 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import require_permission
 from app.core.security import hash_password
-from app.models.user import Permission, Role, User
+from app.models import Permission, Role, User
 from app.repositories.user_repository import PermissionRepository, RoleRepository, UserRepository
-from app.schemas.auth import (
-    PermissionOut,
-    RoleCreate,
-    RoleOut,
-    RoleUpdate,
-    UserCreate,
-    UserOut,
-    UserUpdate,
+from app.schemas.auth_schema import (
+    PERMISSION_RESPONSE_SCHEMA,
+    ROLE_CREATE_SCHEMA,
+    ROLE_RESPONSE_SCHEMA,
+    ROLE_UPDATE_SCHEMA,
+    USER_CREATE_SCHEMA,
+    USER_RESPONSE_SCHEMA,
+    USER_UPDATE_SCHEMA,
 )
 
 users_router = APIRouter(prefix="/users", tags=["User Administration"])
@@ -27,7 +27,7 @@ roles_router = APIRouter(prefix="/roles", tags=["Role & Permission Administratio
 
 
 # ── User Endpoints ────────────────────────────────────────────────────────────
-@users_router.get("", response_model=list[UserOut])
+@users_router.get("", response_model=list[USER_RESPONSE_SCHEMA])
 async def list_users(
     branch_id: UUID | None = None,
     user_status: str | None = Query(None, alias="status"),
@@ -41,9 +41,9 @@ async def list_users(
     return users
 
 
-@users_router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@users_router.post("", response_model=USER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_user(
-    payload: UserCreate,
+    payload: USER_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("user.manage")),
 ) -> User:
@@ -75,7 +75,7 @@ async def create_user(
     return await repo.get_by_id(user.id)
 
 
-@users_router.get("/{user_id}", response_model=UserOut)
+@users_router.get("/{user_id}", response_model=USER_RESPONSE_SCHEMA)
 async def get_user(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -88,11 +88,11 @@ async def get_user(
     return user
 
 
-@users_router.patch("/{user_id}", response_model=UserOut)
-@users_router.put("/{user_id}", response_model=UserOut)
+@users_router.patch("/{user_id}", response_model=USER_RESPONSE_SCHEMA)
+@users_router.put("/{user_id}", response_model=USER_RESPONSE_SCHEMA)
 async def update_user(
     user_id: UUID,
-    payload: UserUpdate,
+    payload: USER_UPDATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("user.manage")),
 ) -> User:
@@ -114,12 +114,21 @@ async def update_user(
         user.branch_id = payload.branch_id
     if payload.status is not None:
         user.status = payload.status
+    if payload.password:
+        user.hashed_password = hash_password(payload.password)
+    if payload.role_ids is not None:
+        if payload.role_ids:
+            role_stmt = select(Role).where(Role.id.in_(payload.role_ids))
+            roles_result = await db.execute(role_stmt)
+            user.roles = list(roles_result.scalars().all())
+        else:
+            user.roles = []
 
     await db.commit()
     return await repo.get_by_id(user.id)
 
 
-@users_router.delete("/{user_id}", response_model=UserOut)
+@users_router.delete("/{user_id}", response_model=USER_RESPONSE_SCHEMA)
 async def deactivate_user(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -140,7 +149,7 @@ async def deactivate_user(
 
 
 # ── Role Endpoints ────────────────────────────────────────────────────────────
-@roles_router.get("", response_model=list[RoleOut])
+@roles_router.get("", response_model=list[ROLE_RESPONSE_SCHEMA])
 async def list_roles(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("user.manage")),
@@ -149,7 +158,7 @@ async def list_roles(
     return await repo.get_all_roles()
 
 
-@roles_router.get("/permissions", response_model=list[PermissionOut])
+@roles_router.get("/permissions", response_model=list[PERMISSION_RESPONSE_SCHEMA])
 async def list_permissions(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("user.manage")),
@@ -158,9 +167,9 @@ async def list_permissions(
     return await repo.get_all_permissions()
 
 
-@roles_router.post("", response_model=RoleOut, status_code=status.HTTP_201_CREATED)
+@roles_router.post("", response_model=ROLE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_role(
-    payload: RoleCreate,
+    payload: ROLE_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("user.manage")),
 ) -> Role:
@@ -186,11 +195,11 @@ async def create_role(
     return await repo.get_by_id(role.id)
 
 
-@roles_router.patch("/{role_id}", response_model=RoleOut)
-@roles_router.put("/{role_id}", response_model=RoleOut)
+@roles_router.patch("/{role_id}", response_model=ROLE_RESPONSE_SCHEMA)
+@roles_router.put("/{role_id}", response_model=ROLE_RESPONSE_SCHEMA)
 async def update_role(
     role_id: UUID,
-    payload: RoleUpdate,
+    payload: ROLE_UPDATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("user.manage")),
 ) -> Role:
@@ -205,6 +214,30 @@ async def update_role(
         role.name = payload.name.upper().strip()
     if payload.description is not None:
         role.description = payload.description
+    if payload.permission_ids is not None:
+        if payload.permission_ids:
+            stmt = select(Permission).where(Permission.id.in_(payload.permission_ids))
+            res = await db.execute(stmt)
+            role.permissions = list(res.scalars().all())
+        else:
+            role.permissions = []
 
     await db.commit()
     return await repo.get_by_id(role.id)
+
+
+@roles_router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+async def delete_role(
+    role_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("user.manage")),
+) -> Response:
+    repo = RoleRepository(db)
+    role = await repo.get_by_id(role_id)
+    if not role:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+    if role.is_system:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete system role")
+    await repo.delete(role)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

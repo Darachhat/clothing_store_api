@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.admin import admin_router
 from app.api.cashier import cashier_router
 from app.api.cashier.pushback import router as pushback_router
+from app.api.deps.system_gate import system_gate
 from app.api.store import store_router
 from app.api.v1.router import router as api_v1_router
 from app.core.config import settings
@@ -79,6 +80,7 @@ app = FastAPI(
     , redoc_url   = "/api/redoc" if settings.ENV != "production" else None
     , openapi_url = f"{settings.API_V1_STR}/openapi.json" if settings.ENV != "production" else None
     , lifespan    = lifespan
+    , dependencies = [Depends(system_gate)]
 )
 
 

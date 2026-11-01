@@ -1,114 +1,229 @@
-"""Import all models so Alembic and SQLAlchemy metadata can detect them."""
-from app.models.auth_model import (  # noqa: F401
-    CREDENTIAL_API_KEY_MODEL
-    , CREDENTIAL_BASIC_MODEL
-    , CREDENTIAL_BEARER_MODEL
-    , CREDENTIAL_OAUTH2_MODEL
-    , SYSTEM_CLIENT_MODEL
-    , SYSTEM_CREDENTIAL_MODEL
-    , SYSTEM_ENDPOINT_MODEL
-    , SYSTEM_MODEL
-    , TELEGRAM_BOT_MODEL
-    , TELEGRAM_CHAT_MODEL
+"""
+Schema-oriented model registry:
+- auth_schema_model       (schema: auth)
+- base_data_schema_model  (schema: base_data)
+- data_schema_model       (schema: data)
+- track_schema_model      (schema: track)
+- public_schema_model     (schema: public)
+"""
+from app.core.database import (  # noqa: F401
+    Base,
+    TEMPLATE_BASE_MODEL,
+    TIMESTAMP_MIXIN,
+    UUID_BASE_MODEL,
+    TimestampMixin,
+    UUIDBase,
 )
-from app.models.base import (  # noqa: F401
-    Base
-    , TEMPLATE_BASE_MODEL
-    , TIMESTAMP_MIXIN
-    , UUID_BASE_MODEL
-    , UUIDBase
+from app.models.auth_schema_model import (  # noqa: F401
+    CREDENTIAL_API_KEY_MODEL,
+    CREDENTIAL_BASIC_MODEL,
+    CREDENTIAL_BEARER_MODEL,
+    CREDENTIAL_OAUTH2_MODEL,
+    SYSTEM_CLIENT_MODEL,
+    SYSTEM_CREDENTIAL_MODEL,
+    SYSTEM_ENDPOINT_MODEL,
+    SYSTEM_MODEL,
+    TELEGRAM_BOT_MODEL,
+    TELEGRAM_CHAT_MODEL,
 )
-from app.models.base_data_model import (  # noqa: F401
-    AUTH_TYPE_MODEL
-    , CURRENCY_MODEL
-    , LANGUAGE_MODEL
-    , STATUS_MODEL
-    , TRANSLATE_MODEL
+from app.models.base_data_schema_model import (  # noqa: F401
+    AUTH_TYPE_MODEL,
+    BRAND_MODEL,
+    Brand,
+    CATEGORY_MODEL,
+    Category,
+    COLOR_MODEL,
+    Color,
+    CURRENCY_MODEL,
+    EXPENSE_CATEGORY_MODEL,
+    ExpenseCategory,
+    LABEL_TEMPLATE_MODEL,
+    LabelTemplate,
+    LANGUAGE_MODEL,
+    PERMISSION_MODEL,
+    Permission,
+    ROLE_MODEL,
+    Role,
+    SIZE_MODEL,
+    Size,
+    STATUS_MODEL,
+    TRANSLATE_MODEL,
+    role_permissions,
 )
-from app.models.branch import Branch, Warehouse  # noqa: F401
-from app.models.customer import Customer, LoyaltyAccount, LoyaltyTransaction  # noqa: F401
-from app.models.inventory import (  # noqa: F401
-    InventoryMovement
-    , InventoryStock
-    , StockTransfer
-    , StockTransferItem
+from app.models.data_schema_model import (  # noqa: F401
+    AUDIT_LOG_MODEL,
+    AuditLog,
+    BRANCH_MODEL,
+    Branch,
+    CATALOG_VERSION_MODEL,
+    CatalogVersion,
+    CUSTOMER_MODEL,
+    Customer,
+    EXPENSE_MODEL,
+    Expense,
+    GOODS_RECEIPT_ITEM_MODEL,
+    GOODS_RECEIPT_MODEL,
+    GoodsReceipt,
+    GoodsReceiptItem,
+    INVENTORY_MOVEMENT_MODEL,
+    INVENTORY_STOCK_MODEL,
+    InventoryMovement,
+    InventoryStock,
+    LOYALTY_ACCOUNT_MODEL,
+    LOYALTY_TRANSACTION_MODEL,
+    LoyaltyAccount,
+    LoyaltyTransaction,
+    NOTIFICATION_SETTING_MODEL,
+    NotificationSetting,
+    PAYMENT_TRANSACTION_MODEL,
+    PROMOTION_MODEL,
+    PURCHASE_ITEM_MODEL,
+    PURCHASE_ORDER_MODEL,
+    PaymentTransaction,
+    Product,
+    ProductVariant,
+    Promotion,
+    PurchaseItem,
+    PurchaseOrder,
+    REFRESH_TOKEN_MODEL,
+    RETURN_ITEM_MODEL,
+    RETURN_MODEL,
+    RETURN_PAYMENT_MODEL,
+    RefreshToken,
+    Return,
+    ReturnItem,
+    ReturnPayment,
+    SALE_ITEM_MODEL,
+    SALE_MODEL,
+    SALE_PAYMENT_MODEL,
+    STOCK_TRANSFER_ITEM_MODEL,
+    STOCK_TRANSFER_MODEL,
+    Sale,
+    SaleItem,
+    SalePayment,
+    StockTransfer,
+    StockTransferItem,
+    Supplier,
+    USER_MODEL,
+    User,
+    Warehouse,
+    WAREHOUSE_MODEL,
+    user_roles,
 )
-from app.models.misc import (  # noqa: F401
-    AuditLog
-    , Expense
-    , ExpenseCategory
-    , LabelTemplate
-    , NotificationSetting
-    , Promotion
+from app.models.track_schema_model import (  # noqa: F401
+    SYSTEM_LOG_MODEL,
+    TELEGRAM_OUTBOUND_MODEL,
 )
-from app.models.payment import PaymentTransaction  # noqa: F401
-from app.models.product import (  # noqa: F401
-    Brand
-    , CatalogVersion
-    , Category
-    , Color
-    , Product
-    , ProductVariant
-    , Size
-    , Supplier
+from app.models.public_schema_model import (  # noqa: F401
+    ALEMBIC_VERSION_MODEL,
+    AlembicVersion,
 )
-from app.models.purchase import (  # noqa: F401
-    GoodsReceipt
-    , GoodsReceiptItem
-    , PurchaseItem
-    , PurchaseOrder
-)
-from app.models.sale import (  # noqa: F401
-    Return
-    , ReturnItem
-    , ReturnPayment
-    , Sale
-    , SaleItem
-    , SalePayment
-)
-from app.models.track_model import (  # noqa: F401
-    SYSTEM_LOG_MODEL
-    , TELEGRAM_OUTBOUND_MODEL
-)
-from app.models.user import Permission, RefreshToken, Role, User  # noqa: F401
 
-# Template UPPERCASE_SNAKE_CASE Model Aliases
-BRANCH_MODEL               = Branch
-WAREHOUSE_MODEL            = Warehouse
-CUSTOMER_MODEL             = Customer
-LOYALTY_ACCOUNT_MODEL      = LoyaltyAccount
-LOYALTY_TRANSACTION_MODEL  = LoyaltyTransaction
-INVENTORY_MOVEMENT_MODEL   = InventoryMovement
-INVENTORY_STOCK_MODEL      = InventoryStock
-STOCK_TRANSFER_MODEL       = StockTransfer
-STOCK_TRANSFER_ITEM_MODEL  = StockTransferItem
-AUDIT_LOG_MODEL            = AuditLog
-EXPENSE_MODEL              = Expense
-EXPENSE_CATEGORY_MODEL     = ExpenseCategory
-LABEL_TEMPLATE_MODEL       = LabelTemplate
-NOTIFICATION_SETTING_MODEL = NotificationSetting
-PROMOTION_MODEL            = Promotion
-PAYMENT_TRANSACTION_MODEL  = PaymentTransaction
-BRAND_MODEL                = Brand
-CATALOG_VERSION_MODEL      = CatalogVersion
-CATEGORY_MODEL             = Category
-COLOR_MODEL                = Color
-PRODUCT_MODEL              = Product
-PRODUCT_VARIANT_MODEL      = ProductVariant
-SIZE_MODEL                 = Size
-SUPPLIER_MODEL             = Supplier
-GOODS_RECEIPT_MODEL        = GoodsReceipt
-GOODS_RECEIPT_ITEM_MODEL   = GoodsReceiptItem
-PURCHASE_ITEM_MODEL        = PurchaseItem
-PURCHASE_ORDER_MODEL       = PurchaseOrder
-RETURN_MODEL               = Return
-RETURN_ITEM_MODEL          = ReturnItem
-RETURN_PAYMENT_MODEL       = ReturnPayment
-SALE_MODEL                 = Sale
-SALE_ITEM_MODEL            = SaleItem
-SALE_PAYMENT_MODEL         = SalePayment
-PERMISSION_MODEL           = Permission
-REFRESH_TOKEN_MODEL        = RefreshToken
-ROLE_MODEL                 = Role
-USER_MODEL                 = User
+# Aliases
+PRODUCT_MODEL         = Product
+PRODUCT_VARIANT_MODEL = ProductVariant
+SUPPLIER_MODEL        = Supplier
 
+__all__ = [
+    "Base",
+    "TEMPLATE_BASE_MODEL",
+    "UUID_BASE_MODEL",
+    "UUIDBase",
+    "SYSTEM_MODEL",
+    "SYSTEM_CLIENT_MODEL",
+    "SYSTEM_CREDENTIAL_MODEL",
+    "CREDENTIAL_BASIC_MODEL",
+    "CREDENTIAL_BEARER_MODEL",
+    "CREDENTIAL_API_KEY_MODEL",
+    "CREDENTIAL_OAUTH2_MODEL",
+    "TELEGRAM_BOT_MODEL",
+    "TELEGRAM_CHAT_MODEL",
+    "SYSTEM_ENDPOINT_MODEL",
+    "TRANSLATE_MODEL",
+    "STATUS_MODEL",
+    "AUTH_TYPE_MODEL",
+    "LANGUAGE_MODEL",
+    "CURRENCY_MODEL",
+    "Role",
+    "ROLE_MODEL",
+    "Permission",
+    "PERMISSION_MODEL",
+    "role_permissions",
+    "Category",
+    "CATEGORY_MODEL",
+    "Brand",
+    "BRAND_MODEL",
+    "Color",
+    "COLOR_MODEL",
+    "Size",
+    "SIZE_MODEL",
+    "ExpenseCategory",
+    "EXPENSE_CATEGORY_MODEL",
+    "LabelTemplate",
+    "LABEL_TEMPLATE_MODEL",
+    "User",
+    "USER_MODEL",
+    "user_roles",
+    "RefreshToken",
+    "REFRESH_TOKEN_MODEL",
+    "Branch",
+    "BRANCH_MODEL",
+    "Warehouse",
+    "WAREHOUSE_MODEL",
+    "Supplier",
+    "SUPPLIER_MODEL",
+    "Product",
+    "PRODUCT_MODEL",
+    "ProductVariant",
+    "PRODUCT_VARIANT_MODEL",
+    "CatalogVersion",
+    "CATALOG_VERSION_MODEL",
+    "InventoryStock",
+    "INVENTORY_STOCK_MODEL",
+    "InventoryMovement",
+    "INVENTORY_MOVEMENT_MODEL",
+    "StockTransfer",
+    "STOCK_TRANSFER_MODEL",
+    "StockTransferItem",
+    "STOCK_TRANSFER_ITEM_MODEL",
+    "PurchaseOrder",
+    "PURCHASE_ORDER_MODEL",
+    "PurchaseItem",
+    "PURCHASE_ITEM_MODEL",
+    "GoodsReceipt",
+    "GOODS_RECEIPT_MODEL",
+    "GoodsReceiptItem",
+    "GOODS_RECEIPT_ITEM_MODEL",
+    "Sale",
+    "SALE_MODEL",
+    "SaleItem",
+    "SALE_ITEM_MODEL",
+    "SalePayment",
+    "SALE_PAYMENT_MODEL",
+    "Return",
+    "RETURN_MODEL",
+    "ReturnItem",
+    "RETURN_ITEM_MODEL",
+    "ReturnPayment",
+    "RETURN_PAYMENT_MODEL",
+    "Customer",
+    "CUSTOMER_MODEL",
+    "LoyaltyAccount",
+    "LOYALTY_ACCOUNT_MODEL",
+    "LoyaltyTransaction",
+    "LOYALTY_TRANSACTION_MODEL",
+    "PaymentTransaction",
+    "PAYMENT_TRANSACTION_MODEL",
+    "Expense",
+    "EXPENSE_MODEL",
+    "Promotion",
+    "PROMOTION_MODEL",
+    "AuditLog",
+    "AUDIT_LOG_MODEL",
+    "NotificationSetting",
+    "NOTIFICATION_SETTING_MODEL",
+    "SYSTEM_LOG_MODEL",
+    "TELEGRAM_OUTBOUND_MODEL",
+    "AlembicVersion",
+    "ALEMBIC_VERSION_MODEL",
+]

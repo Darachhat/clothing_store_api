@@ -8,14 +8,14 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.misc import Expense
+from app.models import Expense
 from app.repositories.misc_repository import (
     ExpenseCategoryRepository,
     ExpenseRepository,
     PromotionRepository,
 )
-from app.schemas.expense import ExpenseCreate, ExpenseUpdate
-from app.schemas.promotion import CouponValidationResponse
+from app.schemas.expense_schema import EXPENSE_CREATE_SCHEMA, EXPENSE_UPDATE_SCHEMA
+from app.schemas.promotion_schema import COUPON_VALIDATION_RESPONSE_SCHEMA
 from app.utils.generators import generate_expense_number
 
 
@@ -28,7 +28,7 @@ class ExpenseService:
     async def create_expense(
         self,
         created_by: UUID,
-        data: ExpenseCreate,
+        data: EXPENSE_CREATE_SCHEMA,
         auto_approve: bool = False,
     ) -> Expense:
         category = await self.category_repo.get_by_id(data.category_id)
@@ -38,13 +38,29 @@ class ExpenseService:
                 detail=f"Expense category {data.category_id} not found",
             )
 
+        from sqlalchemy import select
+        from app.models import Branch
+
+        branch_id = data.branch_id
+        nil_uuid = UUID("00000000-0000-0000-0000-000000000000")
+        if not branch_id or branch_id == nil_uuid:
+            branch = (
+                await self.db.execute(
+                    select(Branch).where(Branch.status == "ACTIVE").order_by(Branch.created_at.asc()).limit(1)
+                )
+            ).scalar_one_or_none()
+            if not branch:
+                branch = (await self.db.execute(select(Branch).limit(1))).scalar_one_or_none()
+            if branch:
+                branch_id = branch.id
+
         expense_number = await generate_expense_number(self.db)
         status_val = "APPROVED" if auto_approve else "PENDING"
 
         expense = Expense(
             expense_number=expense_number,
             category_id=data.category_id,
-            branch_id=data.branch_id,
+            branch_id=branch_id,
             amount=data.amount,
             payment_method=data.payment_method,
             expense_date=data.expense_date,
@@ -63,7 +79,7 @@ class ExpenseService:
     async def update_expense(
         self,
         expense_id: UUID,
-        data: ExpenseUpdate,
+        data: EXPENSE_UPDATE_SCHEMA,
     ) -> Expense:
         expense = await self.expense_repo.get_by_id(expense_id)
         if not expense:
@@ -109,7 +125,9 @@ class ExpenseService:
             )
 
         expense.status = "REJECTED"
-        expense.approved_by = rejected_by
+        # `approved_by` must stay reserved for approvers; record the rejector in the notes.
+        note = f"Rejected by user {rejected_by}"
+        expense.notes = f"{expense.notes}\n{note}" if expense.notes else note
         await self.db.flush()
         return await self.expense_repo.get_by_id(expense.id)
 
@@ -123,10 +141,10 @@ class PromotionService:
         self,
         code: str,
         cart_total: Decimal,
-    ) -> CouponValidationResponse:
+    ) -> COUPON_VALIDATION_RESPONSE_SCHEMA:
         promo = await self.promo_repo.get_by_code(code.upper().strip())
         if not promo:
-            return CouponValidationResponse(
+            return COUPON_VALIDATION_RESPONSE_SCHEMA(
                 valid=False,
                 discount_amount=Decimal("0"),
                 message="Invalid coupon code",
@@ -134,28 +152,28 @@ class PromotionService:
 
         now = datetime.now(UTC)
         if promo.status != "ACTIVE":
-            return CouponValidationResponse(
+            return COUPON_VALIDATION_RESPONSE_SCHEMA(
                 valid=False,
                 discount_amount=Decimal("0"),
                 message="Promotion is no longer active",
             )
 
         if promo.start_datetime > now or promo.end_datetime < now:
-            return CouponValidationResponse(
+            return COUPON_VALIDATION_RESPONSE_SCHEMA(
                 valid=False,
                 discount_amount=Decimal("0"),
                 message="Coupon is not valid at this time",
             )
 
         if promo.usage_limit is not None and promo.usage_count >= promo.usage_limit:
-            return CouponValidationResponse(
+            return COUPON_VALIDATION_RESPONSE_SCHEMA(
                 valid=False,
                 discount_amount=Decimal("0"),
                 message="Coupon usage limit reached",
             )
 
         if cart_total < promo.min_purchase_amount:
-            return CouponValidationResponse(
+            return COUPON_VALIDATION_RESPONSE_SCHEMA(
                 valid=False,
                 discount_amount=Decimal("0"),
                 message=f"Minimum purchase amount of ${promo.min_purchase_amount} required",
@@ -174,7 +192,7 @@ class PromotionService:
         if discount > cart_total:
             discount = cart_total
 
-        return CouponValidationResponse(
+        return COUPON_VALIDATION_RESPONSE_SCHEMA(
             valid=True,
             discount_amount=discount.quantize(Decimal("0.01")),
             message=f"Coupon applied: ${discount:.2f} off",

@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.misc import Expense, ExpenseCategory, Promotion
+from app.models import Expense, ExpenseCategory, Promotion
 from app.repositories.base import BaseRepository
 
 

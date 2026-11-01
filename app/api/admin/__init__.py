@@ -6,9 +6,9 @@ Auth endpoints (login/refresh/logout) are intentionally open within this lane.
 from fastapi import APIRouter, Depends
 
 from app.api.admin.auth import require_admin_or_manager
-from app.api.v1.endpoints.attachments import router as attachments_router
+from app.api.v1.endpoints.attachments import router as attachments_router, uploads_router
 from app.api.v1.endpoints.auth import router as auth_router
-from app.api.v1.endpoints.branches import router as branches_router
+from app.api.v1.endpoints.branches import router as branches_router, warehouses_router
 from app.api.v1.endpoints.catalog import (
     brands_router,
     categories_router,
@@ -28,6 +28,7 @@ from app.api.v1.endpoints.purchases import router as purchases_router
 from app.api.v1.endpoints.reports import router as reports_router
 from app.api.v1.endpoints.sales import returns_router, router as sales_router
 from app.api.v1.endpoints.users import roles_router, users_router
+from app.api.v1.handlers.audit_handler import router as audit_router
 
 # Root lane router
 admin_router = APIRouter(prefix="/api/admin/v1", tags=["[Admin Lane]"])
@@ -58,6 +59,9 @@ _protected.include_router(promotions_router)
 _protected.include_router(users_router)
 _protected.include_router(roles_router)
 _protected.include_router(branches_router)
+_protected.include_router(warehouses_router)
 _protected.include_router(attachments_router)
+_protected.include_router(uploads_router)
+_protected.include_router(audit_router)
 
 admin_router.include_router(_protected)

@@ -33,7 +33,7 @@ async def _reconcile() -> dict:
     from sqlalchemy.pool import NullPool
 
     from app.core.config import settings
-    from app.models.payment import PaymentTransaction
+    from app.models import PaymentTransaction
     from app.services.payment_service import PaymentService
     from app.services.payway import payway_client
 

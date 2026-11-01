@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.core.logger import logger
-from app.models.track_model import SYSTEM_LOG_MODEL, TELEGRAM_OUTBOUND_MODEL
+from app.models import SYSTEM_LOG_MODEL, TELEGRAM_OUTBOUND_MODEL
 from app.schemas.system_log_schema import (
     SYSTEM_LOG_LIST_OUT_SCHEMA
     , SYSTEM_LOG_RESPONSE_SCHEMA

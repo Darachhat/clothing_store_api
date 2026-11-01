@@ -10,10 +10,17 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.deps import require_permission
-from app.models.product import ProductVariant
-from app.models.sale import Return, Sale, SaleItem
-from app.models.user import User
-from app.schemas.sale import ReturnCreate, ReturnOut, SaleComplete, SaleCreate, SaleOut
+from app.models import ProductVariant
+from app.models import Return, Sale, SaleItem
+from app.models import User
+from app.schemas.sale_schema import (
+    RETURN_CREATE_SCHEMA,
+    RETURN_CREATE_FOR_SALE_SCHEMA,
+    RETURN_RESPONSE_SCHEMA,
+    SALE_COMPLETE_SCHEMA,
+    SALE_CREATE_SCHEMA,
+    SALE_RESPONSE_SCHEMA,
+)
 from app.services.sale_service import SaleService
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
@@ -35,7 +42,7 @@ def _sale_eager_options():
     )
 
 
-@router.get("/", response_model=list[SaleOut])
+@router.get("/", response_model=list[SALE_RESPONSE_SCHEMA])
 async def list_sales(
     skip: int = 0,
     limit: int = 50,
@@ -52,9 +59,9 @@ async def list_sales(
     return list(result.scalars().all())
 
 
-@router.post("/", response_model=SaleOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=SALE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_sale(
-    body: SaleCreate,
+    body: SALE_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("sale.create")),
 ) -> Sale:
@@ -88,7 +95,20 @@ async def create_sale(
     return res.scalar_one()
 
 
-@router.get("/{id}", response_model=SaleOut)
+@router.get("/returns", response_model=list[RETURN_RESPONSE_SCHEMA])
+async def list_sales_returns_alias(
+    skip: int = 0,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("sale.refund")),
+) -> list[Return]:
+    result = await db.execute(
+        select(Return).offset(skip).limit(limit).order_by(Return.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+@router.get("/{id}", response_model=SALE_RESPONSE_SCHEMA)
 async def get_sale(
     id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -105,10 +125,60 @@ async def get_sale(
     return sale
 
 
-@router.post("/{id}/complete", response_model=SaleOut)
+@router.get("/{id}/receipt", response_model=SALE_RESPONSE_SCHEMA)
+async def get_sale_receipt(
+    id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("sale.read")),
+) -> Sale:
+    result = await db.execute(
+        select(Sale)
+        .where(Sale.id == id)
+        .options(*_sale_eager_options())
+    )
+    sale = result.scalar_one_or_none()
+    if not sale:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found")
+    return sale
+
+
+@router.post("/{id}/return", response_model=RETURN_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
+async def create_sale_return(
+    id: UUID,
+    body: RETURN_CREATE_FOR_SALE_SCHEMA,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("sale.refund")),
+) -> Return:
+    result = await db.execute(
+        select(Sale)
+        .where(Sale.id == id)
+        .options(selectinload(Sale.items))
+    )
+    sale = result.scalar_one_or_none()
+    if not sale:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Original sale not found")
+
+    service = SaleService(db)
+    ret = await service.process_return(
+        original_sale=sale,
+        return_items_data=[i.model_dump() for i in body.items],
+        refund_payments=[p.model_dump() for p in body.refund_payments],
+        return_type=body.return_type,
+        reason=body.reason,
+        processed_by=current_user.id,
+    )
+    from app.services.product_service import ProductService
+
+    await ProductService.increment_inventory_version(db)
+    await db.commit()
+    await db.refresh(ret)
+    return ret
+
+
+@router.post("/{id}/complete", response_model=SALE_RESPONSE_SCHEMA)
 async def complete_sale(
     id: UUID,
-    body: SaleComplete,
+    body: SALE_COMPLETE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("sale.create")),
 ) -> Sale:
@@ -137,8 +207,8 @@ async def complete_sale(
     return res.scalar_one()
 
 
-@router.post("/{id}/cancel", response_model=SaleOut)
-@router.post("/{id}/void", response_model=SaleOut, include_in_schema=False)
+@router.post("/{id}/cancel", response_model=SALE_RESPONSE_SCHEMA)
+@router.post("/{id}/void", response_model=SALE_RESPONSE_SCHEMA, include_in_schema=False)
 async def cancel_sale(
     id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -170,7 +240,7 @@ async def cancel_sale(
 returns_router = APIRouter(prefix="/returns", tags=["Returns"])
 
 
-@returns_router.get("/", response_model=list[ReturnOut])
+@returns_router.get("/", response_model=list[RETURN_RESPONSE_SCHEMA])
 async def list_returns(
     skip: int = 0,
     limit: int = 50,
@@ -183,9 +253,9 @@ async def list_returns(
     return list(result.scalars().all())
 
 
-@returns_router.post("/", response_model=ReturnOut, status_code=status.HTTP_201_CREATED)
+@returns_router.post("/", response_model=RETURN_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_return(
-    body: ReturnCreate,
+    body: RETURN_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("sale.refund")),
 ) -> Return:
@@ -207,6 +277,9 @@ async def create_return(
         reason=body.reason,
         processed_by=current_user.id,
     )
+    from app.services.product_service import ProductService
+
+    await ProductService.increment_inventory_version(db)
     await db.commit()
     await db.refresh(ret)
     return ret

@@ -35,10 +35,21 @@ class SETTINGS(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES     : int                                           = 60
     REFRESH_TOKEN_EXPIRE_DAYS       : int                                           = 7
     API_KEY_HEADER_NAME             : str                                           = "X-API-KEY"
+
+    # ── Inbound system/client credential gate ────────────────────────────────
+    # Header carrying `Basic <b64(client:secret)>` or `Bearer <token>`; Authorization stays the user JWT.
+    SYSTEM_AUTH_HEADER_NAME         : str                                           = "X-System-Authorization"
+    # off     : no checking
+    # audit   : validate if present, log what would be rejected, never block
+    # enforce : reject missing/invalid credentials (401) except allow-listed paths
+    # Unset -> "enforce" in production, otherwise "audit".
+    SYSTEM_AUTH_MODE                : Optional[Literal["off", "audit", "enforce"]]  = None
+    # Extra comma/JSON list of path prefixes exempt from the gate (in addition to the built-in ones).
+    SYSTEM_AUTH_PUBLIC_PATHS        : List[str]                                     = []
     WHITE_LIST_CORS                 : List[str]                                     = ["*"]
     BACKEND_CORS_ORIGINS            : List[str]                                     = ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003"]
 
-    @field_validator("BACKEND_CORS_ORIGINS", "WHITE_LIST_CORS", mode="before")
+    @field_validator("BACKEND_CORS_ORIGINS", "WHITE_LIST_CORS", "SYSTEM_AUTH_PUBLIC_PATHS", mode="before")
     @classmethod
     def parse_cors(cls, v: str | List[str]) -> List[str]:
         if isinstance(v, str):
@@ -80,6 +91,13 @@ class SETTINGS(BaseSettings):
         user = self.DB_USER or self.POSTGRES_USER
         pwd  = self.DB_PASS or self.POSTGRES_PASSWORD
         return f"postgresql+asyncpg://{user}:{pwd}@{host}:{port}/{name}"
+
+    @property
+    def system_auth_mode(self) -> str:
+        """Effective gate mode: explicit SYSTEM_AUTH_MODE, else enforce in production / audit elsewhere."""
+        if self.SYSTEM_AUTH_MODE:
+            return self.SYSTEM_AUTH_MODE
+        return "enforce" if self.ENVIRONMENT == "production" else "audit"
 
     # ── Redis & Task Broker Configuration ─────────────────────────────────────
     REDIS_HOST                      : str                                           = "localhost"

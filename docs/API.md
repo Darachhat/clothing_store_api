@@ -555,3 +555,61 @@ Generated from the FastAPI OpenAPI spec (`app.openapi()`). Interactive docs: `/d
 | Method | Path | Summary | Auth | Request | Response |
 | --- | --- | --- | --- | --- | --- |
 | GET | `/health` | Root Health Check |  |  | object |
+
+
+---
+
+## Phase 1–3 Additions & Synchronized Contracts (2026-11-01)
+
+### Storefront Orders (`api/store/v1`)
+| Method | Path | Summary | Auth | Request | Response |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/api/store/v1/orders` | Create storefront order with atomic stock deduction | Bearer (Customer) | `StoreOrderCreateRequest` | `StoreOrderOut` |
+| GET | `/api/store/v1/orders` | List authenticated customer's orders | Bearer (Customer) |  | `StoreOrderOut[]` |
+| GET | `/api/store/v1/orders/{order_id}` | Get authenticated customer's order detail | Bearer (Customer) |  | `StoreOrderOut` |
+
+### Domain Audit Logs (`api/v1` & `api/admin/v1`)
+| Method | Path | Summary | Auth | Request | Response |
+| --- | --- | --- | --- | --- | --- |
+| GET | `/api/v1/audit-logs` | List append-only domain audit logs (`public.audit_logs`) | Bearer | `?action=&entity_type=&user_id=&skip=&limit=` | `AuditLogOut[]` |
+| GET | `/api/admin/v1/audit-logs` | List append-only domain audit logs (Admin Lane) | Bearer (`ADMIN`/`MANAGER`) | `?action=&entity_type=&user_id=&skip=&limit=` | `AuditLogOut[]` |
+
+### Branches & Warehouses CRUD (`api/v1`, `api/admin/v1`, `api/cashier/v1`)
+| Method | Path | Summary | Auth | Request | Response |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/api/v1/branches` | Create branch | Bearer (`branch.create`) | `BranchCreate` | `BranchOut` |
+| GET | `/api/v1/branches/{id}` | Get branch | Bearer (`branch.read`) |  | `BranchOut` |
+| PUT/PATCH | `/api/v1/branches/{id}` | Update branch | Bearer (`branch.update`) | `BranchUpdate` | `BranchOut` |
+| DELETE | `/api/v1/branches/{id}` | Deactivate branch | Bearer (`branch.delete`) |  | `204 No Content` |
+| GET | `/api/v1/warehouses` | List warehouses (`?branch_id=`) | Bearer (`branch.read`) |  | `WarehouseOut[]` |
+| POST | `/api/v1/warehouses` | Create warehouse | Bearer (`branch.create`) | `WarehouseCreate` | `WarehouseOut` |
+| GET | `/api/v1/warehouses/{id}` | Get warehouse | Bearer (`branch.read`) |  | `WarehouseOut` |
+| PUT/PATCH | `/api/v1/warehouses/{id}` | Update warehouse | Bearer (`branch.update`) | `WarehouseUpdate` | `WarehouseOut` |
+| DELETE | `/api/v1/warehouses/{id}` | Deactivate warehouse | Bearer (`branch.delete`) |  | `204 No Content` |
+
+### Additional Synchronized Routes (`api/v1`, `api/admin/v1`, `api/cashier/v1`)
+| Method | Path | Summary | Auth | Request | Response |
+| --- | --- | --- | --- | --- | --- |
+| POST | `/api/v1/products/{id}/variants` | Create variant under product | Bearer (`product.create`) | `ProductVariantCreateForProduct` | `ProductVariantOut` |
+| POST | `/api/v1/product-variants/{id}/regenerate-codes` | Regenerate SKU/QR/Barcode | Bearer (`product.update`) |  | `ProductVariantOut` |
+| GET | `/api/v1/product-variants/qr/{reference}` | Alias for `/by-qr/{reference}` | Bearer |  | `ProductVariantOut` |
+| GET | `/api/v1/product-variants/barcode/{barcode}` | Alias for `/by-barcode/{barcode}` | Bearer |  | `ProductVariantOut` |
+| GET | `/api/v1/product-variants/sku/{sku}` | Alias for `/by-sku/{sku}` | Bearer |  | `ProductVariantOut` |
+| GET | `/api/v1/inventory` | Root alias for `/inventory/stocks` | Bearer (`inventory.read`) |  | `InventoryStockOut[]` |
+| GET | `/api/v1/inventory/low-stock` | List low-stock items (`quantity <= reorder_level`) | Bearer (`inventory.read`) |  | `InventoryStockOut[]` |
+| POST | `/api/v1/inventory/transfers/{id}/complete` | Complete transfer in one step | Bearer (`inventory.transfer`) |  | `StockTransferOut` |
+| POST | `/api/v1/purchases/{order_id}/receive` | Simplified PO goods receipt | Bearer (`purchase.receive`) | `PurchaseOrderReceiveRequest` | `GoodsReceiptOut` |
+| GET/POST | `/api/v1/sales/returns` | Alias for `/returns` | Bearer | `ReturnCreate` | `ReturnOut[]` / `ReturnOut` |
+| GET | `/api/v1/sales/{id}/receipt` | Receipt data for sale | Bearer (`sale.read`) |  | `SaleOut` |
+| POST | `/api/v1/sales/{id}/return` | Process return for sale `{id}` | Bearer (`sale.refund`) | `SaleReturnRequest` | `ReturnOut` |
+| DELETE | `/api/v1/customers/{customer_id}` | Soft-delete customer | Bearer (`customer.delete`) |  | `204 No Content` |
+| GET | `/api/v1/customers/{customer_id}/loyalty` | Get loyalty account + recent transactions | Bearer (`customer.read`) |  | `LoyaltyDetailsResponse` |
+| POST | `/api/v1/customers/{customer_id}/loyalty/adjust` | Adjust loyalty points (`points_delta`/`reason`) | Bearer (`customer.update`) | `AdjustPointsRequest` | `LoyaltyDetailsResponse` |
+| DELETE | `/api/v1/expenses/{expense_id}` | Delete expense | Bearer |  | `204 No Content` |
+| DELETE | `/api/v1/expenses/categories/{cat_id}` | Delete expense category | Bearer |  | `204 No Content` |
+| GET | `/api/v1/reports/profit-loss` | Alias for `/reports/profit` | Bearer (`report.read`) |  | `object` |
+| GET | `/api/v1/reports/expenses` | Expenses summary report by category | Bearer (`report.read`) |  | `object` |
+| GET | `/api/v1/reports/sales/export-csv` | Export sales report as CSV | Bearer (`report.read`) |  | `text/csv` |
+| GET | `/api/v1/labels/presets` | List label format presets | Bearer (`product.read`) |  | `object[]` |
+| DELETE | `/api/v1/roles/{role_id}` | Delete non-system role | Bearer |  | `204 No Content` |
+| POST | `/api/v1/uploads/images` | Alias for `/attachments/upload` | Bearer | `multipart/form-data` | `AttachmentResponse` |

@@ -9,9 +9,12 @@ from loguru import logger
 from pydantic import BaseModel
 
 from app.core.config import settings
+from app.core.deps import get_current_active_user
+from app.models import User
 from app.services.minio_service import minio_service
 
 router = APIRouter(prefix="/attachments", tags=["Attachments & Files"])
+uploads_router = APIRouter(prefix="/uploads", tags=["Attachments & Files"])
 
 
 class AttachmentResponse(BaseModel):
@@ -36,9 +39,16 @@ class AttachmentListResponse(BaseModel):
     status_code=status.HTTP_201_CREATED,
     summary="Upload a single attachment",
 )
+@uploads_router.post(
+    "/images",
+    response_model=AttachmentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload an image attachment",
+)
 async def upload_attachment(
     file: UploadFile = File(..., description="File to upload"),
     folder: str = Form("attachments", description="Folder/category (e.g. products, expenses, receipts, avatars)"),
+    _: User = Depends(get_current_active_user),
 ):
     """Upload any file attachment (images, receipts, invoices, PDFs)."""
     try:
@@ -63,6 +73,7 @@ async def upload_attachment(
 async def upload_multiple_attachments(
     files: List[UploadFile] = File(..., description="Files to upload"),
     folder: str = Form("attachments", description="Folder/category"),
+    _: User = Depends(get_current_active_user),
 ):
     """Upload multiple file attachments."""
     results = []
@@ -83,6 +94,7 @@ async def upload_multiple_attachments(
 async def list_attachments(
     folder: str = Query("", description="Filter by folder prefix (e.g. products, expenses)"),
     limit: int = Query(50, ge=1, le=200),
+    _: User = Depends(get_current_active_user),
 ):
     """List stored attachments."""
     items = minio_service.list_files(prefix=folder, limit=limit)
@@ -104,7 +116,10 @@ async def get_attachment_link(object_name: str):
     status_code=status.HTTP_200_OK,
     summary="Delete an attachment",
 )
-async def delete_attachment(object_name: str):
+async def delete_attachment(
+    object_name: str,
+    _: User = Depends(get_current_active_user),
+):
     """Delete an attachment."""
     success = minio_service.delete_file(object_name)
     if not success:

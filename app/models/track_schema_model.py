@@ -7,7 +7,7 @@ from sqlalchemy import Boolean, DateTime, Integer, JSON, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import TEMPLATE_BASE_MODEL
+from app.core.database import TEMPLATE_BASE_MODEL
 
 JSON_TYPE = JSONB().with_variant(JSON(), "sqlite")
 

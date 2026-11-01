@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.base import UUIDBase
+from app.models import UUIDBase
 
 ModelType = TypeVar("ModelType", bound=UUIDBase)
 

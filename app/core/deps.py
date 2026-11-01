@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import verify_access_token
-from app.models.user import User
+from app.models import User
 from app.repositories.user_repository import UserRepository
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -73,3 +73,8 @@ def require_permission(permission_code: str):
         return current_user
 
     return _check
+
+
+# Guard for infrastructure/management surfaces (system clients, credentials, Telegram bots,
+# system logs). Module-level so it can be referenced from routers and overridden in tests.
+require_system_admin = require_permission("settings.manage")

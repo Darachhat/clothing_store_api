@@ -9,15 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import require_permission
-from app.models.purchase import GoodsReceipt, PurchaseOrder
-from app.models.user import User
+from app.models import GoodsReceipt, PurchaseOrder
+from app.models import User
 from app.repositories.purchase_repository import GoodsReceiptRepository, PurchaseOrderRepository
-from app.schemas.purchase import (
-    GoodsReceiptCreate,
-    GoodsReceiptOut,
-    PurchaseOrderCreate,
-    PurchaseOrderOut,
-    PurchaseOrderUpdate,
+from app.schemas.purchase_schema import (
+    GOODS_RECEIPT_CREATE_SCHEMA,
+    GOODS_RECEIPT_CREATE_FOR_ORDER_SCHEMA,
+    GOODS_RECEIPT_RESPONSE_SCHEMA,
+    PURCHASE_ORDER_CREATE_SCHEMA,
+    PURCHASE_ORDER_RESPONSE_SCHEMA,
+    PURCHASE_ORDER_UPDATE_SCHEMA,
 )
 from app.services.purchase_service import PurchaseService
 
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/purchases", tags=["Purchasing & Goods Receipts"])
 
 
 # ── Purchase Orders ───────────────────────────────────────────────────────────
-@router.get("", response_model=list[PurchaseOrderOut])
+@router.get("", response_model=list[PURCHASE_ORDER_RESPONSE_SCHEMA])
 async def list_purchase_orders(
     supplier_id: UUID | None = None,
     branch_id: UUID | None = None,
@@ -52,9 +53,9 @@ async def list_purchase_orders(
     return list(orders)
 
 
-@router.post("", response_model=PurchaseOrderOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PURCHASE_ORDER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_purchase_order(
-    payload: PurchaseOrderCreate,
+    payload: PURCHASE_ORDER_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("purchase.create")),
 ) -> PurchaseOrder:
@@ -64,7 +65,7 @@ async def create_purchase_order(
     return po
 
 
-@router.get("/{order_id}", response_model=PurchaseOrderOut)
+@router.get("/{order_id}", response_model=PURCHASE_ORDER_RESPONSE_SCHEMA)
 async def get_purchase_order(
     order_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -77,10 +78,10 @@ async def get_purchase_order(
     return po
 
 
-@router.patch("/{order_id}", response_model=PurchaseOrderOut)
+@router.patch("/{order_id}", response_model=PURCHASE_ORDER_RESPONSE_SCHEMA)
 async def update_purchase_order(
     order_id: UUID,
-    payload: PurchaseOrderUpdate,
+    payload: PURCHASE_ORDER_UPDATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("purchase.create")),
 ) -> PurchaseOrder:
@@ -90,7 +91,7 @@ async def update_purchase_order(
     return po
 
 
-@router.post("/{order_id}/approve", response_model=PurchaseOrderOut)
+@router.post("/{order_id}/approve", response_model=PURCHASE_ORDER_RESPONSE_SCHEMA)
 async def approve_purchase_order(
     order_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -102,7 +103,7 @@ async def approve_purchase_order(
     return po
 
 
-@router.post("/{order_id}/cancel", response_model=PurchaseOrderOut)
+@router.post("/{order_id}/cancel", response_model=PURCHASE_ORDER_RESPONSE_SCHEMA)
 async def cancel_purchase_order(
     order_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -115,7 +116,7 @@ async def cancel_purchase_order(
 
 
 # ── Goods Receipts ────────────────────────────────────────────────────────────
-@router.get("/{order_id}/receipts", response_model=list[GoodsReceiptOut])
+@router.get("/{order_id}/receipts", response_model=list[GOODS_RECEIPT_RESPONSE_SCHEMA])
 async def list_order_receipts(
     order_id: UUID,
     skip: int = Query(0, ge=0),
@@ -128,9 +129,28 @@ async def list_order_receipts(
     return list(receipts)
 
 
-@router.post("/receipts", response_model=GoodsReceiptOut, status_code=status.HTTP_201_CREATED)
+@router.post("/{order_id}/receive", response_model=GOODS_RECEIPT_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
+async def receive_purchase_order(
+    order_id: UUID,
+    payload: GOODS_RECEIPT_CREATE_FOR_ORDER_SCHEMA,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("purchase.receive")),
+) -> GoodsReceipt:
+    service = PurchaseService(db)
+    data = GOODS_RECEIPT_CREATE_SCHEMA(
+        purchase_order_id=order_id,
+        warehouse_id=payload.warehouse_id,
+        notes=payload.notes if payload.notes is not None else payload.note,
+        items=payload.items,
+    )
+    gr = await service.create_goods_receipt(received_by=current_user.id, data=data)
+    await db.commit()
+    return gr
+
+
+@router.post("/receipts", response_model=GOODS_RECEIPT_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_goods_receipt(
-    payload: GoodsReceiptCreate,
+    payload: GOODS_RECEIPT_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("purchase.receive")),
 ) -> GoodsReceipt:
@@ -140,7 +160,7 @@ async def create_goods_receipt(
     return gr
 
 
-@router.get("/receipts/{receipt_id}", response_model=GoodsReceiptOut)
+@router.get("/receipts/{receipt_id}", response_model=GOODS_RECEIPT_RESPONSE_SCHEMA)
 async def get_goods_receipt(
     receipt_id: UUID,
     db: AsyncSession = Depends(get_db),

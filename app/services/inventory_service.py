@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.inventory import InventoryMovement, InventoryStock, StockTransfer, StockTransferItem
+from app.models import InventoryMovement, InventoryStock, StockTransfer, StockTransferItem
 from app.repositories.inventory_repository import InventoryStockRepository
 from app.utils.generators import generate_transfer_number
 
@@ -29,7 +29,7 @@ class InventoryService:
         created_by: UUID | None = None,
     ) -> tuple[InventoryStock, InventoryMovement]:
         """Adjust stock and record movement. Call within a transaction."""
-        return await self.stock_repo.adjust_stock(
+        stock, movement = await self.stock_repo.adjust_stock(
             variant_id=variant_id,
             warehouse_id=warehouse_id,
             delta=quantity_delta,
@@ -39,6 +39,24 @@ class InventoryService:
             note=note,
             created_by=created_by,
         )
+        from app.services.audit_service import AuditService
+
+        await AuditService.record(
+            self.db,
+            action=f"INVENTORY_{movement_type.upper()}",
+            entity_type="inventory_stock",
+            entity_id=stock.id,
+            user_id=created_by,
+            old_data={"quantity": movement.before_quantity},
+            new_data={
+                "quantity": movement.after_quantity,
+                "delta": quantity_delta,
+                "variant_id": str(variant_id),
+                "warehouse_id": str(warehouse_id),
+                "note": note,
+            },
+        )
+        return stock, movement
 
     async def create_transfer(
         self,
@@ -80,10 +98,10 @@ class InventoryService:
     async def dispatch_transfer(
         self, transfer: StockTransfer, dispatched_by: UUID
     ) -> StockTransfer:
-        if transfer.status != "PENDING":
+        if transfer.status not in ("PENDING", "DRAFT", "APPROVED"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only PENDING transfers can be dispatched",
+                detail="Only DRAFT, PENDING, or APPROVED transfers can be dispatched",
             )
 
         for item in transfer.items:
@@ -104,6 +122,20 @@ class InventoryService:
         transfer.shipped_at = datetime.now(UTC)
         await self.db.flush()
         return transfer
+
+    async def complete_transfer(
+        self, transfer: StockTransfer, completed_by: UUID
+    ) -> StockTransfer:
+        """Complete a transfer in one step or finalize an IN_TRANSIT transfer."""
+        if transfer.status in ("DRAFT", "PENDING", "APPROVED"):
+            await self.dispatch_transfer(transfer, completed_by)
+        if transfer.status == "IN_TRANSIT":
+            await self.receive_transfer(transfer, completed_by)
+            return transfer
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot complete transfer in status {transfer.status}",
+        )
 
     async def receive_transfer(
         self, transfer: StockTransfer, received_by: UUID
