@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Generic, List, Optional, TypeVar
 import uuid
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic.main import BaseModel
+from pydantic import ConfigDict, Field
 
 from app.core.enum.response_enum import RESPONSE_CODE_ENUM
 

@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, List, Optional
 import uuid
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic.main import BaseModel
+from pydantic import EmailStr, Field, model_validator
 
 
 class LOYALTY_TRANSACTION_RESPONSE_SCHEMA(BaseModel):

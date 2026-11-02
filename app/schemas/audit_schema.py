@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import uuid
-from pydantic import BaseModel, Field
+from pydantic.main import BaseModel
+from pydantic import Field
 
 
 class AUDIT_LOG_CREATE_REQUEST_SCHEMA(BaseModel):

@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, List, Optional
 import uuid
-from pydantic import BaseModel, Field, model_validator
+from pydantic.main import BaseModel
+from pydantic import Field, model_validator
 
 
 class INVENTORY_STOCK_RESPONSE_SCHEMA(BaseModel):

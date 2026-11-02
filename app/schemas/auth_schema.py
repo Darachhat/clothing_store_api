@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import uuid
-from pydantic import AliasChoices, BaseModel, EmailStr, Field, model_validator
+from pydantic.main import BaseModel
+from pydantic import AliasChoices, EmailStr, Field, model_validator
 
 from app.schemas.base_schema import STATS_SUMMARY_SCHEMA
 

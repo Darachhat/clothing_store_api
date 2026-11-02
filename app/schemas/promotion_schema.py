@@ -5,7 +5,8 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, List, Optional
 import uuid
-from pydantic import BaseModel, Field, model_validator
+from pydantic.main import BaseModel
+from pydantic import Field, model_validator
 
 
 def _normalize_promo_payload(data: Any) -> Any:
