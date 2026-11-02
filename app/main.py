@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.admin import admin_router
@@ -31,7 +31,7 @@ from app.middleware.access import BASE_MIDDLEWARE
 from app.middleware.auth import SYSTEM_AUTH_MIDDLEWARE
 from app.middleware.trace import TRACE_MIDDLEWARE
 from app.schemas.base_schema import RESPONSE_ENVELOPE
-from app.services.minio_service import MINIO_SERVICE
+from app.services.r2_service import R2_SERVICE
 
 
 @asynccontextmanager
@@ -53,10 +53,9 @@ async def lifespan(app: FastAPI):
 
         if settings.ENV not in ("testing", "test"):
             try:
-                MINIO_SERVICE.ensure_bucket_exists()
-                logger.info("MinIO bucket initialized successfully")
+                R2_SERVICE.ensure_bucket_exists()
             except Exception as e:
-                logger.warning(f"MinIO bucket auto-initialization deferred: {e}")
+                logger.warning(f"R2 storage auto-initialization notice: {e}")
 
         yield
     except Exception as e:
@@ -195,8 +194,36 @@ if not uploads_dir:
     uploads_dir = "/app/uploads"
     os.makedirs(uploads_dir, exist_ok=True)
 
-logger.info(f"Mounting static uploads from: {uploads_dir}")
-app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+logger.info(f"Configuring static uploads path: {uploads_dir}")
+
+
+@app.get("/uploads/{file_path:path}", tags=["Static Files"])
+async def serve_uploads(file_path: str):
+    """Serve uploaded media from local disk or stream directly from Cloudflare R2."""
+    clean_path = file_path.strip("/\\")
+    local_target = os.path.join(uploads_dir, clean_path)
+
+    # 1. High-speed local disk serving
+    if os.path.isfile(local_target):
+        return FileResponse(local_target)
+
+    # 2. Cloudflare R2 fallback streaming
+    if R2_SERVICE.is_configured():
+        client = R2_SERVICE.get_client()
+        if client:
+            candidate_keys = [f"uploads/{clean_path}", clean_path]
+            for key in candidate_keys:
+                try:
+                    obj = client.get_object(Bucket=settings.R2_BUCKET_NAME, Key=key)
+                    return StreamingResponse(
+                        obj["Body"],
+                        media_type=obj.get("ContentType", "application/octet-stream"),
+                        headers={"Cache-Control": "public, max-age=86400"},
+                    )
+                except Exception:
+                    pass
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload file not found")
 
 # Unified v1 API Router (/api/v1/*)
 app.include_router(api_v1_router, prefix=settings.API_V1_STR)

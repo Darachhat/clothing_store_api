@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.core.deps import get_current_active_user
 from app.models import User
-from app.services.minio_service import MINIO_SERVICE
+from app.services.r2_service import R2_SERVICE
 
 
 router = APIRouter(prefix="/attachments", tags=["Attachments & Files"])
@@ -53,7 +53,7 @@ async def upload_attachment(
 ):
     """Upload any file attachment (images, receipts, invoices, PDFs)."""
     try:
-        result = MINIO_SERVICE.upload_file(file=file, folder=folder)
+        result = R2_SERVICE.upload_file(file=file, folder=folder)
         return result
     except HTTPException:
         raise
@@ -80,7 +80,7 @@ async def upload_multiple_attachments(
     results = []
     for file in files:
         try:
-            res = MINIO_SERVICE.upload_file(file=file, folder=folder)
+            res = R2_SERVICE.upload_file(file=file, folder=folder)
             results.append(res)
         except Exception as e:
             logger.error(f"Error uploading {file.filename}: {e}")
@@ -98,7 +98,7 @@ async def list_attachments(
     _: User = Depends(get_current_active_user),
 ):
     """List stored attachments."""
-    items = MINIO_SERVICE.list_files(prefix=folder, limit=limit)
+    items = R2_SERVICE.list_files(prefix=folder, limit=limit)
     return {"items": items, "total": len(items)}
 
 
@@ -108,7 +108,7 @@ async def list_attachments(
 )
 async def get_attachment_link(object_name: str):
     """Redirect to the public URL of an attachment."""
-    url = f"{settings.MINIO_PUBLIC_URL}/{settings.MINIO_BUCKET_NAME}/{object_name}"
+    url = R2_SERVICE.get_presigned_url(object_name)
     return RedirectResponse(url=url)
 
 
@@ -122,7 +122,7 @@ async def delete_attachment(
     _: User = Depends(get_current_active_user),
 ):
     """Delete an attachment."""
-    success = MINIO_SERVICE.delete_file(object_name)
+    success = R2_SERVICE.delete_file(object_name)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

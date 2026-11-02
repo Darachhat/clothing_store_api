@@ -5,7 +5,11 @@ from app.services.base_service import BASE_SERVICE
 from app.services.customer_service import CUSTOMER_SERVICE
 from app.services.inventory_service import INVENTORY_SERVICE
 from app.services.log_service import LOG_SERVICE
-from app.services.minio_service import MINIO_SERVICE
+from app.services.r2_service import (
+    R2_SERVICE
+    , R2_STORAGE_SERVICE
+    , MINIO_SERVICE
+)
 from app.services.misc_service import (
     EXPENSE_SERVICE
     , PROMOTION_SERVICE
@@ -31,6 +35,8 @@ __all__ = [
     , "INVENTORY_SERVICE"
     , "LOG_SERVICE"
     , "MINIO_SERVICE"
+    , "R2_SERVICE"
+    , "R2_STORAGE_SERVICE"
     , "PAYMENT_SERVICE"
     , "PRODUCT_SERVICE"
     , "PROMOTION_SERVICE"

@@ -48,8 +48,8 @@ aiosqlite==0.22.1
 ruff==0.6.9
 mypy==1.11.2
 
-# Object Storage
-minio==7.2.10
+# Object Storage (Cloudflare R2 / S3)
+boto3>=1.35.0,<2.0.0
 
 # Utilities
 python-slugify==8.0.4

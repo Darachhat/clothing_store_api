@@ -44,23 +44,6 @@ services:
     networks:
       - clothing_network
 
-  # ─── MinIO Object Storage (S3 API & Web Console) ───────────────────────────
-  minio:
-    image: minio/minio:latest
-    container_name: clothing_store-minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
-    volumes:
-      - minio_data:/data
-    ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # Web Console
-    networks:
-      - clothing_network
-
   # ─── Backend API (FastAPI) ─────────────────────────────────────────────────
   api:
     build:
@@ -73,7 +56,6 @@ services:
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      MINIO_ENDPOINT: minio:9000
     volumes:
       - .:/app
       - uploads:/app/uploads
@@ -82,8 +64,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      minio:
-        condition: service_started
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - clothing_network
@@ -100,15 +80,12 @@ services:
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      MINIO_ENDPOINT: minio:9000
     volumes:
       - .:/app
       - uploads:/app/uploads
     depends_on:
       redis:
         condition: service_healthy
-      minio:
-        condition: service_started
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
     networks:
       - clothing_network
@@ -138,8 +115,6 @@ volumes:
     name: clothing_store_postgres_data
   redis_data:
     name: clothing_store_redis_data
-  minio_data:
-    name: clothing_store_minio_data
   uploads:
     name: clothing_store_uploads
 

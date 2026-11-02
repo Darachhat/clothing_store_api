@@ -146,13 +146,13 @@ class SETTINGS(BaseSettings):
     SEED_ADMIN_EMAIL                : str                                           = "admin@example.com"
     SEED_ADMIN_PASSWORD             : str                                           = "change_me_admin_password"
 
-    # ── MinIO / Object Storage ────────────────────────────────────────────────
-    MINIO_ENDPOINT                  : str                                           = "minio:9000"
-    MINIO_ACCESS_KEY                : str                                           = "minioadmin"
-    MINIO_SECRET_KEY                : str                                           = "minioadmin123"
-    MINIO_BUCKET_NAME               : str                                           = "clothing-store"
-    MINIO_USE_SSL                   : bool                                          = False
-    MINIO_PUBLIC_URL                : str                                           = "http://localhost:9000"
+    # ── Cloudflare R2 / S3 Object Storage ─────────────────────────────────────
+    R2_ACCOUNT_ID                   : str                                           = "68e25d69fa480920a48e040633704398"
+    R2_ENDPOINT_URL                 : str                                           = "https://68e25d69fa480920a48e040633704398.r2.cloudflarestorage.com"
+    R2_ACCESS_KEY_ID                : str                                           = ""
+    R2_SECRET_ACCESS_KEY            : str                                           = ""
+    R2_BUCKET_NAME                  : str                                           = "clothing-store"
+    R2_PUBLIC_URL                   : str                                           = "https://api.kimvannak.store/uploads"
 
     # ── ABA PayWay ────────────────────────────────────────────────────────────
     PAYWAY_ENABLED                  : bool                                          = True
