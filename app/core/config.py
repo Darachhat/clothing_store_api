@@ -81,7 +81,10 @@ class SETTINGS(BaseSettings):
         name = self.DB_NAME or self.POSTGRES_DB
         user = self.DB_USER or self.POSTGRES_USER
         pwd  = self.DB_PASS or self.POSTGRES_PASSWORD
-        return f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{name}"
+        url  = f"postgresql+psycopg2://{user}:{pwd}@{host}:{port}/{name}"
+        if self.DB_SSL and self.DB_SSL.lower() != "disable":
+            url += f"?sslmode={self.DB_SSL}"
+        return url
 
     @property
     def ASYNC_DATABASE_URL(self) -> str:
@@ -90,7 +93,10 @@ class SETTINGS(BaseSettings):
         name = self.DB_NAME or self.POSTGRES_DB
         user = self.DB_USER or self.POSTGRES_USER
         pwd  = self.DB_PASS or self.POSTGRES_PASSWORD
-        return f"postgresql+asyncpg://{user}:{pwd}@{host}:{port}/{name}"
+        url  = f"postgresql+asyncpg://{user}:{pwd}@{host}:{port}/{name}"
+        if self.DB_SSL and self.DB_SSL.lower() != "disable":
+            url += f"?ssl={self.DB_SSL}"
+        return url
 
     @property
     def system_auth_mode(self) -> str:
