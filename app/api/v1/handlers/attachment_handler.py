@@ -11,7 +11,8 @@ from pydantic import BaseModel
 from app.core.config import settings
 from app.core.deps import get_current_active_user
 from app.models import User
-from app.services.minio_service import minio_service
+from app.services.minio_service import MINIO_SERVICE
+
 
 router = APIRouter(prefix="/attachments", tags=["Attachments & Files"])
 uploads_router = APIRouter(prefix="/uploads", tags=["Attachments & Files"])
@@ -52,7 +53,7 @@ async def upload_attachment(
 ):
     """Upload any file attachment (images, receipts, invoices, PDFs)."""
     try:
-        result = minio_service.upload_file(file=file, folder=folder)
+        result = MINIO_SERVICE.upload_file(file=file, folder=folder)
         return result
     except HTTPException:
         raise
@@ -79,7 +80,7 @@ async def upload_multiple_attachments(
     results = []
     for file in files:
         try:
-            res = minio_service.upload_file(file=file, folder=folder)
+            res = MINIO_SERVICE.upload_file(file=file, folder=folder)
             results.append(res)
         except Exception as e:
             logger.error(f"Error uploading {file.filename}: {e}")
@@ -97,7 +98,7 @@ async def list_attachments(
     _: User = Depends(get_current_active_user),
 ):
     """List stored attachments."""
-    items = minio_service.list_files(prefix=folder, limit=limit)
+    items = MINIO_SERVICE.list_files(prefix=folder, limit=limit)
     return {"items": items, "total": len(items)}
 
 
@@ -121,7 +122,7 @@ async def delete_attachment(
     _: User = Depends(get_current_active_user),
 ):
     """Delete an attachment."""
-    success = minio_service.delete_file(object_name)
+    success = MINIO_SERVICE.delete_file(object_name)
     if not success:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

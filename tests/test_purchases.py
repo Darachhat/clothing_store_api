@@ -17,7 +17,7 @@ from app.schemas.purchase_schema import (
     PURCHASE_ITEM_CREATE_SCHEMA,
     PURCHASE_ORDER_CREATE_SCHEMA,
 )
-from app.services.purchase_service import PurchaseService
+from app.services.purchase_service import PURCHASE_SERVICE
 
 
 async def create_purchase_test_infra(db: AsyncSession):
@@ -91,7 +91,7 @@ async def create_purchase_test_infra(db: AsyncSession):
 @pytest.mark.asyncio
 async def test_purchase_order_lifecycle_and_goods_receipt(db: AsyncSession):
     infra = await create_purchase_test_infra(db)
-    service = PurchaseService(db)
+    service = PURCHASE_SERVICE(db)
     stock_repo = InventoryStockRepository(db)
 
     # 1. Create Purchase Order

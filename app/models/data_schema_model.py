@@ -28,16 +28,23 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.core.database import TEMPLATE_BASE_MODEL, UUID_BASE_MODEL
+from app.core.database import BASE_MODEL
 
 if TYPE_CHECKING:
     from app.models.base_data_schema_model import (
+        BRAND_MODEL,
         Brand,
+        CATEGORY_MODEL,
         Category,
+        COLOR_MODEL,
         Color,
+        EXPENSE_CATEGORY_MODEL,
         ExpenseCategory,
+        PERMISSION_MODEL,
         Permission,
+        ROLE_MODEL,
         Role,
+        SIZE_MODEL,
         Size,
     )
 
@@ -52,27 +59,29 @@ user_roles = Table(
 )
 
 
-# ── User & RefreshToken ───────────────────────────────────────────────────────
-class User(UUID_BASE_MODEL):
-    __tablename__ = "users"
-    __table_args__ = {"schema": "data"}
+# ── USER_MODEL ────────────────────────────────────────────────────────────────
+class USER_MODEL(BASE_MODEL):
+    __tablename__               = "users"
+    __table_args__              = {"schema": "data"}
 
-    employee_code: Mapped[str | None] = mapped_column(String(50), unique=True)
-    username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
-    branch_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.branches.id", ondelete="SET NULL")
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    employee_code               : Mapped[Optional[str]]             = mapped_column(String(50), unique=True, nullable=True)
+    username                    : Mapped[str]                       = mapped_column(String(100), unique=True, nullable=False, index=True)
+    email                       : Mapped[str]                       = mapped_column(String(255), unique=True, nullable=False, index=True)
+    full_name                   : Mapped[str]                       = mapped_column(String(200), nullable=False)
+    hashed_password             : Mapped[str]                       = mapped_column(String(255), nullable=False)
+    branch_id                   : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.branches.id", ondelete="SET NULL"), nullable=True
     )
-    last_login_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+    last_login_at               : Mapped[Optional[datetime]]        = mapped_column(DateTime(timezone=True), nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    branch: Mapped[Branch | None] = relationship("Branch", back_populates="users")
-    roles: Mapped[list[Role]] = relationship(
-        "Role", secondary="data.user_roles", back_populates="users", lazy="selectin"
+    branch                      : Mapped[Optional[BRANCH_MODEL]]    = relationship("BRANCH_MODEL", back_populates="users")
+    roles                       : Mapped[list[ROLE_MODEL]]          = relationship(
+        "ROLE_MODEL", secondary="data.user_roles", back_populates="users", lazy="selectin"
     )
-    refresh_tokens: Mapped[list[RefreshToken]] = relationship(
-        "RefreshToken", back_populates="user", cascade="all, delete-orphan"
+    refresh_tokens              : Mapped[list[REFRESH_TOKEN_MODEL]] = relationship(
+        "REFRESH_TOKEN_MODEL", back_populates="user", cascade="all, delete-orphan"
     )
 
     @property
@@ -83,137 +92,154 @@ class User(UUID_BASE_MODEL):
         return code in self.permission_codes
 
 
-class RefreshToken(UUID_BASE_MODEL):
-    __tablename__ = "refresh_tokens"
-    __table_args__ = {"schema": "data"}
+# ── REFRESH_TOKEN_MODEL ───────────────────────────────────────────────────────
+class REFRESH_TOKEN_MODEL(BASE_MODEL):
+    __tablename__               = "refresh_tokens"
+    __table_args__              = {"schema": "data"}
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id                     : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="CASCADE"), nullable=False
     )
-    token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    expires_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False)
-    revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    ip_address: Mapped[str | None] = mapped_column(String(45))
-    user_agent: Mapped[str | None] = mapped_column(String(500))
+    token_hash                  : Mapped[str]                       = mapped_column(String(255), unique=True, nullable=False, index=True)
+    expires_at                  : Mapped[datetime]                  = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked                     : Mapped[bool]                      = mapped_column(Boolean, default=False, nullable=False)
+    ip_address                  : Mapped[Optional[str]]             = mapped_column(String(45), nullable=True)
+    user_agent                  : Mapped[Optional[str]]             = mapped_column(String(500), nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    user: Mapped[User] = relationship("User", back_populates="refresh_tokens")
-
-
-# ── Branch & Warehouse ────────────────────────────────────────────────────────
-class Branch(UUID_BASE_MODEL):
-    __tablename__ = "branches"
-    __table_args__ = {"schema": "data"}
-
-    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    address: Mapped[str | None] = mapped_column(Text)
-    phone: Mapped[str | None] = mapped_column(String(50))
-
-    warehouses: Mapped[list[Warehouse]] = relationship("Warehouse", back_populates="branch")
-    users: Mapped[list[User]] = relationship("User", back_populates="branch")
+    user                        : Mapped[USER_MODEL]                = relationship("USER_MODEL", back_populates="refresh_tokens")
 
 
-class Warehouse(UUID_BASE_MODEL):
-    __tablename__ = "warehouses"
-    __table_args__ = {"schema": "data"}
+# ── BRANCH_MODEL ──────────────────────────────────────────────────────────────
+class BRANCH_MODEL(BASE_MODEL):
+    __tablename__               = "branches"
+    __table_args__              = {"schema": "data"}
 
-    branch_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code                        : Mapped[str]                       = mapped_column(String(50), unique=True, nullable=False)
+    name                        : Mapped[str]                       = mapped_column(String(200), nullable=False)
+    address                     : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    phone                       : Mapped[Optional[str]]             = mapped_column(String(50), nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
+
+    warehouses                  : Mapped[list[WAREHOUSE_MODEL]]     = relationship("WAREHOUSE_MODEL", back_populates="branch")
+    users                       : Mapped[list[USER_MODEL]]          = relationship("USER_MODEL", back_populates="branch")
+
+
+# ── WAREHOUSE_MODEL ───────────────────────────────────────────────────────────
+class WAREHOUSE_MODEL(BASE_MODEL):
+    __tablename__               = "warehouses"
+    __table_args__              = {"schema": "data"}
+
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    branch_id                   : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.branches.id", ondelete="RESTRICT"), nullable=False
     )
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    address: Mapped[str | None] = mapped_column(Text)
-    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    name                        : Mapped[str]                       = mapped_column(String(200), nullable=False)
+    address                     : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    is_default                  : Mapped[bool]                      = mapped_column(Boolean, default=False, nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    branch: Mapped[Branch] = relationship("Branch", back_populates="warehouses")
-    inventory_stocks: Mapped[list[InventoryStock]] = relationship(
-        "InventoryStock", back_populates="warehouse"
+    branch                      : Mapped[BRANCH_MODEL]              = relationship("BRANCH_MODEL", back_populates="warehouses")
+    inventory_stocks            : Mapped[list[INVENTORY_STOCK_MODEL]] = relationship(
+        "INVENTORY_STOCK_MODEL", back_populates="warehouse"
     )
 
 
-# ── Supplier, Product & Variant ───────────────────────────────────────────────
-class Supplier(UUID_BASE_MODEL):
-    __tablename__ = "suppliers"
-    __table_args__ = {"schema": "data"}
+# ── SUPPLIER_MODEL ────────────────────────────────────────────────────────────
+class SUPPLIER_MODEL(BASE_MODEL):
+    __tablename__               = "suppliers"
+    __table_args__              = {"schema": "data"}
 
-    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    phone: Mapped[str | None] = mapped_column(String(50))
-    email: Mapped[str | None] = mapped_column(String(255))
-    address: Mapped[str | None] = mapped_column(Text)
-    contact_person: Mapped[str | None] = mapped_column(String(200))
-    notes: Mapped[str | None] = mapped_column(Text)
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code                        : Mapped[str]                       = mapped_column(String(50), unique=True, nullable=False)
+    name                        : Mapped[str]                       = mapped_column(String(200), nullable=False)
+    phone                       : Mapped[Optional[str]]             = mapped_column(String(50), nullable=True)
+    email                       : Mapped[Optional[str]]             = mapped_column(String(255), nullable=True)
+    address                     : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    contact_person              : Mapped[Optional[str]]             = mapped_column(String(200), nullable=True)
+    notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    products: Mapped[list[Product]] = relationship("Product", back_populates="supplier")
+    products                    : Mapped[list[PRODUCT_MODEL]]       = relationship("PRODUCT_MODEL", back_populates="supplier")
 
 
-class Product(UUID_BASE_MODEL):
-    __tablename__ = "products"
-    __table_args__ = {"schema": "data"}
+# ── PRODUCT_MODEL ─────────────────────────────────────────────────────────────
+class PRODUCT_MODEL(BASE_MODEL):
+    __tablename__               = "products"
+    __table_args__              = {"schema": "data"}
 
-    code: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(300), nullable=False)
-    slug: Mapped[str] = mapped_column(String(300), unique=True, nullable=False, index=True)
-    description: Mapped[str | None] = mapped_column(Text)
-    category_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("base_data.categories.id", ondelete="SET NULL")
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code                        : Mapped[str]                       = mapped_column(String(100), unique=True, nullable=False, index=True)
+    name                        : Mapped[str]                       = mapped_column(String(300), nullable=False)
+    slug                        : Mapped[str]                       = mapped_column(String(300), unique=True, nullable=False, index=True)
+    description                 : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    category_id                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("base_data.categories.id", ondelete="SET NULL"), nullable=True
     )
-    brand_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("base_data.brands.id", ondelete="SET NULL")
+    brand_id                    : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("base_data.brands.id", ondelete="SET NULL"), nullable=True
     )
-    supplier_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.suppliers.id", ondelete="SET NULL")
+    supplier_id                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.suppliers.id", ondelete="SET NULL"), nullable=True
     )
-    image_url: Mapped[str | None] = mapped_column(String(500))
+    image_url                   : Mapped[Optional[str]]             = mapped_column(String(500), nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    category: Mapped[Category | None] = relationship("Category", back_populates="products")
-    brand: Mapped[Brand | None] = relationship("Brand", back_populates="products")
-    supplier: Mapped[Supplier | None] = relationship("Supplier", back_populates="products")
-    variants: Mapped[list[ProductVariant]] = relationship(
-        "ProductVariant", back_populates="product", cascade="all, delete-orphan", lazy="selectin"
+    category                    : Mapped[Optional[CATEGORY_MODEL]]  = relationship("CATEGORY_MODEL", back_populates="products")
+    brand                       : Mapped[Optional[BRAND_MODEL]]     = relationship("BRAND_MODEL", back_populates="products")
+    supplier                    : Mapped[Optional[SUPPLIER_MODEL]]  = relationship("SUPPLIER_MODEL", back_populates="products")
+    variants                    : Mapped[list[PRODUCT_VARIANT_MODEL]] = relationship(
+        "PRODUCT_VARIANT_MODEL", back_populates="product", cascade="all, delete-orphan", lazy="selectin"
     )
 
 
-class ProductVariant(UUID_BASE_MODEL):
-    __tablename__ = "product_variants"
-    __table_args__ = (
+# ── PRODUCT_VARIANT_MODEL ─────────────────────────────────────────────────────
+class PRODUCT_VARIANT_MODEL(BASE_MODEL):
+    __tablename__               = "product_variants"
+    __table_args__              = (
         UniqueConstraint("product_id", "color_id", "size_id", name="uq_variant_product_color_size"),
         {"schema": "data"},
     )
 
-    product_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    product_id                  : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.products.id", ondelete="CASCADE"), nullable=False
     )
-    sku: Mapped[str] = mapped_column(String(200), unique=True, nullable=False, index=True)
-    barcode: Mapped[str | None] = mapped_column(String(200), unique=True, index=True)
-    qr_reference: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
-    color_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("base_data.colors.id", ondelete="SET NULL")
+    sku                         : Mapped[str]                       = mapped_column(String(200), unique=True, nullable=False, index=True)
+    barcode                     : Mapped[Optional[str]]             = mapped_column(String(200), unique=True, index=True, nullable=True)
+    qr_reference                : Mapped[str]                       = mapped_column(String(50), unique=True, nullable=False, index=True)
+    color_id                    : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("base_data.colors.id", ondelete="SET NULL"), nullable=True
     )
-    size_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("base_data.sizes.id", ondelete="SET NULL")
+    size_id                     : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("base_data.sizes.id", ondelete="SET NULL"), nullable=True
     )
-    cost_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    selling_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    wholesale_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    weight_grams: Mapped[int | None] = mapped_column(Integer)
-    image_url: Mapped[str | None] = mapped_column(String(500))
+    cost_price                  : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    selling_price               : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    wholesale_price             : Mapped[Optional[Decimal]]         = mapped_column(Numeric(12, 2), nullable=True)
+    weight_grams                : Mapped[Optional[int]]             = mapped_column(Integer, nullable=True)
+    image_url                   : Mapped[Optional[str]]             = mapped_column(String(500), nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    product: Mapped[Product] = relationship("Product", back_populates="variants")
-    color: Mapped[Color | None] = relationship("Color", back_populates="variants")
-    size: Mapped[Size | None] = relationship("Size", back_populates="variants")
-    inventory_stocks: Mapped[list[InventoryStock]] = relationship(
-        "InventoryStock", back_populates="variant"
+    product                     : Mapped[PRODUCT_MODEL]             = relationship("PRODUCT_MODEL", back_populates="variants")
+    color                       : Mapped[Optional[COLOR_MODEL]]     = relationship("COLOR_MODEL", back_populates="variants")
+    size                        : Mapped[Optional[SIZE_MODEL]]      = relationship("SIZE_MODEL", back_populates="variants")
+    inventory_stocks            : Mapped[list[INVENTORY_STOCK_MODEL]] = relationship(
+        "INVENTORY_STOCK_MODEL", back_populates="variant"
     )
 
 
-class CatalogVersion(TEMPLATE_BASE_MODEL):
-    __tablename__ = "catalog_versions"
-    __table_args__ = {"schema": "data"}
+# ── CATALOG_VERSION_MODEL ─────────────────────────────────────────────────────
+class CATALOG_VERSION_MODEL(BASE_MODEL):
+    __tablename__               = "catalog_versions"
+    __table_args__              = {"schema": "data"}
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    inventory_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    status_code: Mapped[str] = mapped_column(String(50), default="active", nullable=False)
+    id                          : Mapped[int]                       = mapped_column(Integer, primary_key=True, default=1)
+    version                     : Mapped[int]                       = mapped_column(Integer, default=1, nullable=False)
+    inventory_version           : Mapped[int]                       = mapped_column(Integer, default=1, nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
     @property
     def product_version(self) -> int:
@@ -224,238 +250,262 @@ class CatalogVersion(TEMPLATE_BASE_MODEL):
         self.version = val
 
 
-# ── Inventory ─────────────────────────────────────────────────────────────────
-class InventoryStock(UUID_BASE_MODEL):
-    __tablename__ = "inventory_stocks"
-    __table_args__ = (
+# ── INVENTORY_STOCK_MODEL ─────────────────────────────────────────────────────
+class INVENTORY_STOCK_MODEL(BASE_MODEL):
+    __tablename__               = "inventory_stocks"
+    __table_args__              = (
         UniqueConstraint("variant_id", "warehouse_id", name="uq_stock_variant_warehouse"),
         CheckConstraint("quantity >= 0", name="ck_stock_quantity_non_negative"),
         {"schema": "data"},
     )
 
-    variant_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    variant_id                  : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.product_variants.id", ondelete="CASCADE"), nullable=False
     )
-    warehouse_id: Mapped[uuid.UUID] = mapped_column(
+    warehouse_id                : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.warehouses.id", ondelete="CASCADE"), nullable=False
     )
-    quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    reorder_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    quantity                    : Mapped[int]                       = mapped_column(Integer, default=0, nullable=False)
+    reorder_level               : Mapped[int]                       = mapped_column(Integer, default=0, nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    variant: Mapped[ProductVariant] = relationship("ProductVariant", back_populates="inventory_stocks")
-    warehouse: Mapped[Warehouse] = relationship("Warehouse", back_populates="inventory_stocks")
+    variant                     : Mapped[PRODUCT_VARIANT_MODEL]     = relationship("PRODUCT_VARIANT_MODEL", back_populates="inventory_stocks")
+    warehouse                   : Mapped[WAREHOUSE_MODEL]           = relationship("WAREHOUSE_MODEL", back_populates="inventory_stocks")
 
 
-class InventoryMovement(UUID_BASE_MODEL):
-    __tablename__ = "inventory_movements"
-    __table_args__ = {"schema": "data"}
+# ── INVENTORY_MOVEMENT_MODEL ──────────────────────────────────────────────────
+class INVENTORY_MOVEMENT_MODEL(BASE_MODEL):
+    __tablename__               = "inventory_movements"
+    __table_args__              = {"schema": "data"}
 
-    variant_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    variant_id                  : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.product_variants.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    warehouse_id: Mapped[uuid.UUID] = mapped_column(
+    warehouse_id                : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.warehouses.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    movement_type: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
-    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
-    before_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
-    after_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
-    reference_type: Mapped[str | None] = mapped_column(String(50))
-    reference_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    note: Mapped[str | None] = mapped_column(Text)
+    movement_type               : Mapped[str]                       = mapped_column(String(30), nullable=False, index=True)
+    quantity                    : Mapped[int]                       = mapped_column(Integer, nullable=False)
+    before_quantity             : Mapped[int]                       = mapped_column(Integer, nullable=False)
+    after_quantity              : Mapped[int]                       = mapped_column(Integer, nullable=False)
+    reference_type              : Mapped[Optional[str]]             = mapped_column(String(50), nullable=True)
+    reference_id                : Mapped[Optional[uuid.UUID]]       = mapped_column(UUID(as_uuid=True), nullable=True)
+    note                        : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    variant: Mapped[ProductVariant] = relationship("ProductVariant")
-    warehouse: Mapped[Warehouse] = relationship("Warehouse")
+    variant                     : Mapped[PRODUCT_VARIANT_MODEL]     = relationship("PRODUCT_VARIANT_MODEL")
+    warehouse                   : Mapped[WAREHOUSE_MODEL]           = relationship("WAREHOUSE_MODEL")
 
 
-class StockTransfer(UUID_BASE_MODEL):
-    __tablename__ = "stock_transfers"
-    __table_args__ = {"schema": "data"}
+# ── STOCK_TRANSFER_MODEL ──────────────────────────────────────────────────────
+class STOCK_TRANSFER_MODEL(BASE_MODEL):
+    __tablename__               = "stock_transfers"
+    __table_args__              = {"schema": "data"}
 
-    transfer_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    from_warehouse_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    transfer_number             : Mapped[str]                       = mapped_column(String(50), unique=True, nullable=False)
+    from_warehouse_id           : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.warehouses.id", ondelete="RESTRICT"), nullable=False
     )
-    to_warehouse_id: Mapped[uuid.UUID] = mapped_column(
+    to_warehouse_id             : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.warehouses.id", ondelete="RESTRICT"), nullable=False
     )
-    notes: Mapped[str | None] = mapped_column(Text)
-    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+    notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    created_by_user_id          : Mapped[Optional[uuid.UUID]]       = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="RESTRICT"), nullable=True
     )
-    approved_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL")
+    approved_by                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL"), nullable=True
     )
-    shipped_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
-    received_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+    shipped_at                  : Mapped[Optional[datetime]]        = mapped_column(DateTime(timezone=True), nullable=True)
+    received_at                 : Mapped[Optional[datetime]]        = mapped_column(DateTime(timezone=True), nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    from_warehouse: Mapped[Warehouse] = relationship("Warehouse", foreign_keys=[from_warehouse_id])
-    to_warehouse: Mapped[Warehouse] = relationship("Warehouse", foreign_keys=[to_warehouse_id])
-    items: Mapped[list[StockTransferItem]] = relationship(
-        "StockTransferItem", back_populates="transfer", cascade="all, delete-orphan"
+    from_warehouse              : Mapped[WAREHOUSE_MODEL]           = relationship("WAREHOUSE_MODEL", foreign_keys=[from_warehouse_id])
+    to_warehouse                : Mapped[WAREHOUSE_MODEL]           = relationship("WAREHOUSE_MODEL", foreign_keys=[to_warehouse_id])
+    items                       : Mapped[list[STOCK_TRANSFER_ITEM_MODEL]] = relationship(
+        "STOCK_TRANSFER_ITEM_MODEL", back_populates="transfer", cascade="all, delete-orphan"
     )
 
 
-class StockTransferItem(UUID_BASE_MODEL):
-    __tablename__ = "stock_transfer_items"
-    __table_args__ = {"schema": "data"}
+# ── STOCK_TRANSFER_ITEM_MODEL ─────────────────────────────────────────────────
+class STOCK_TRANSFER_ITEM_MODEL(BASE_MODEL):
+    __tablename__               = "stock_transfer_items"
+    __table_args__              = {"schema": "data"}
 
-    transfer_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    transfer_id                 : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.stock_transfers.id", ondelete="CASCADE"), nullable=False
     )
-    variant_id: Mapped[uuid.UUID] = mapped_column(
+    variant_id                  : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.product_variants.id", ondelete="RESTRICT"), nullable=False
     )
-    quantity_requested: Mapped[int] = mapped_column(Integer, nullable=False)
-    quantity_sent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    quantity_received: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    notes: Mapped[str | None] = mapped_column(Text)
+    quantity_requested          : Mapped[int]                       = mapped_column(Integer, nullable=False)
+    quantity_sent               : Mapped[int]                       = mapped_column(Integer, default=0, nullable=False)
+    quantity_received           : Mapped[int]                       = mapped_column(Integer, default=0, nullable=False)
+    notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    transfer: Mapped[StockTransfer] = relationship("StockTransfer", back_populates="items")
-    variant: Mapped[ProductVariant] = relationship("ProductVariant")
+    transfer                    : Mapped[STOCK_TRANSFER_MODEL]      = relationship("STOCK_TRANSFER_MODEL", back_populates="items")
+    variant                     : Mapped[PRODUCT_VARIANT_MODEL]     = relationship("PRODUCT_VARIANT_MODEL")
 
 
-# ── Purchase ──────────────────────────────────────────────────────────────────
-class PurchaseOrder(UUID_BASE_MODEL):
-    __tablename__ = "purchase_orders"
-    __table_args__ = {"schema": "data"}
+# ── PURCHASE_ORDER_MODEL ──────────────────────────────────────────────────────
+class PURCHASE_ORDER_MODEL(BASE_MODEL):
+    __tablename__               = "purchase_orders"
+    __table_args__              = {"schema": "data"}
 
-    po_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    supplier_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    po_number                   : Mapped[str]                       = mapped_column(String(50), unique=True, nullable=False)
+    supplier_id                 : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.suppliers.id", ondelete="RESTRICT"), nullable=False
     )
-    branch_id: Mapped[uuid.UUID] = mapped_column(
+    branch_id                   : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.branches.id", ondelete="RESTRICT"), nullable=False
     )
-    warehouse_id: Mapped[uuid.UUID] = mapped_column(
+    warehouse_id                : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.warehouses.id", ondelete="RESTRICT"), nullable=False
     )
-    subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    tax_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
-    total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
-    expected_date: Mapped[date | None] = mapped_column(Date)
-    notes: Mapped[str | None] = mapped_column(Text)
-    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+    subtotal                    : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    tax_amount                  : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    total                       : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    expected_date               : Mapped[Optional[date]]            = mapped_column(Date, nullable=True)
+    notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    created_by_user_id          : Mapped[Optional[uuid.UUID]]       = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="RESTRICT"), nullable=True
     )
-    approved_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL")
+    approved_by                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL"), nullable=True
+    )
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
+
+    supplier                    : Mapped[SUPPLIER_MODEL]            = relationship("SUPPLIER_MODEL")
+    branch                      : Mapped[BRANCH_MODEL]              = relationship("BRANCH_MODEL")
+    warehouse                   : Mapped[WAREHOUSE_MODEL]           = relationship("WAREHOUSE_MODEL")
+    items                       : Mapped[list[PURCHASE_ITEM_MODEL]] = relationship(
+        "PURCHASE_ITEM_MODEL", back_populates="purchase_order", cascade="all, delete-orphan"
+    )
+    goods_receipts              : Mapped[list[GOODS_RECEIPT_MODEL]] = relationship(
+        "GOODS_RECEIPT_MODEL", back_populates="purchase_order"
     )
 
-    supplier: Mapped[Supplier] = relationship("Supplier")
-    branch: Mapped[Branch] = relationship("Branch")
-    warehouse: Mapped[Warehouse] = relationship("Warehouse")
-    items: Mapped[list[PurchaseItem]] = relationship(
-        "PurchaseItem", back_populates="purchase_order", cascade="all, delete-orphan"
-    )
-    goods_receipts: Mapped[list[GoodsReceipt]] = relationship(
-        "GoodsReceipt", back_populates="purchase_order"
-    )
 
+# ── PURCHASE_ITEM_MODEL ───────────────────────────────────────────────────────
+class PURCHASE_ITEM_MODEL(BASE_MODEL):
+    __tablename__               = "purchase_items"
+    __table_args__              = {"schema": "data"}
 
-class PurchaseItem(UUID_BASE_MODEL):
-    __tablename__ = "purchase_items"
-    __table_args__ = {"schema": "data"}
-
-    purchase_order_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    purchase_order_id           : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.purchase_orders.id", ondelete="CASCADE"), nullable=False
     )
-    variant_id: Mapped[uuid.UUID] = mapped_column(
+    variant_id                  : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.product_variants.id", ondelete="RESTRICT"), nullable=False
     )
-    quantity_ordered: Mapped[int] = mapped_column(Integer, nullable=False)
-    quantity_received: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    unit_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    quantity_ordered            : Mapped[int]                       = mapped_column(Integer, nullable=False)
+    quantity_received           : Mapped[int]                       = mapped_column(Integer, default=0, nullable=False)
+    unit_cost                   : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    subtotal                    : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    purchase_order: Mapped[PurchaseOrder] = relationship("PurchaseOrder", back_populates="items")
-    variant: Mapped[ProductVariant] = relationship("ProductVariant")
+    purchase_order              : Mapped[PURCHASE_ORDER_MODEL]      = relationship("PURCHASE_ORDER_MODEL", back_populates="items")
+    variant                     : Mapped[PRODUCT_VARIANT_MODEL]     = relationship("PRODUCT_VARIANT_MODEL")
 
 
-class GoodsReceipt(UUID_BASE_MODEL):
-    __tablename__ = "goods_receipts"
-    __table_args__ = {"schema": "data"}
+# ── GOODS_RECEIPT_MODEL ───────────────────────────────────────────────────────
+class GOODS_RECEIPT_MODEL(BASE_MODEL):
+    __tablename__               = "goods_receipts"
+    __table_args__              = {"schema": "data"}
 
-    gr_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    purchase_order_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    gr_number                   : Mapped[str]                       = mapped_column(String(50), unique=True, nullable=False)
+    purchase_order_id           : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.purchase_orders.id", ondelete="RESTRICT"), nullable=False
     )
-    warehouse_id: Mapped[uuid.UUID] = mapped_column(
+    warehouse_id                : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.warehouses.id", ondelete="RESTRICT"), nullable=False
     )
-    notes: Mapped[str | None] = mapped_column(Text)
-    received_by: Mapped[uuid.UUID | None] = mapped_column(
+    notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    received_by                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="RESTRICT"), nullable=True
     )
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    purchase_order: Mapped[PurchaseOrder] = relationship("PurchaseOrder", back_populates="goods_receipts")
-    warehouse: Mapped[Warehouse] = relationship("Warehouse")
-    items: Mapped[list[GoodsReceiptItem]] = relationship(
-        "GoodsReceiptItem", back_populates="goods_receipt", cascade="all, delete-orphan"
+    purchase_order              : Mapped[PURCHASE_ORDER_MODEL]      = relationship("PURCHASE_ORDER_MODEL", back_populates="goods_receipts")
+    warehouse                   : Mapped[WAREHOUSE_MODEL]           = relationship("WAREHOUSE_MODEL")
+    items                       : Mapped[list[GOODS_RECEIPT_ITEM_MODEL]] = relationship(
+        "GOODS_RECEIPT_ITEM_MODEL", back_populates="goods_receipt", cascade="all, delete-orphan"
     )
 
 
-class GoodsReceiptItem(UUID_BASE_MODEL):
-    __tablename__ = "goods_receipt_items"
-    __table_args__ = {"schema": "data"}
+# ── GOODS_RECEIPT_ITEM_MODEL ──────────────────────────────────────────────────
+class GOODS_RECEIPT_ITEM_MODEL(BASE_MODEL):
+    __tablename__               = "goods_receipt_items"
+    __table_args__              = {"schema": "data"}
 
-    goods_receipt_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    goods_receipt_id            : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.goods_receipts.id", ondelete="CASCADE"), nullable=False
     )
-    purchase_item_id: Mapped[uuid.UUID] = mapped_column(
+    purchase_item_id            : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.purchase_items.id", ondelete="RESTRICT"), nullable=False
     )
-    variant_id: Mapped[uuid.UUID] = mapped_column(
+    variant_id                  : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.product_variants.id", ondelete="RESTRICT"), nullable=False
     )
-    quantity_received: Mapped[int] = mapped_column(Integer, nullable=False)
-    unit_cost: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    notes: Mapped[str | None] = mapped_column(Text)
+    quantity_received           : Mapped[int]                       = mapped_column(Integer, nullable=False)
+    unit_cost                   : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    goods_receipt: Mapped[GoodsReceipt] = relationship("GoodsReceipt", back_populates="items")
-    purchase_item: Mapped[PurchaseItem] = relationship("PurchaseItem")
-    variant: Mapped[ProductVariant] = relationship("ProductVariant")
+    goods_receipt               : Mapped[GOODS_RECEIPT_MODEL]       = relationship("GOODS_RECEIPT_MODEL", back_populates="items")
+    purchase_item               : Mapped[PURCHASE_ITEM_MODEL]       = relationship("PURCHASE_ITEM_MODEL")
+    variant                     : Mapped[PRODUCT_VARIANT_MODEL]     = relationship("PRODUCT_VARIANT_MODEL")
 
 
-# ── Sale & Return ─────────────────────────────────────────────────────────────
-class Sale(UUID_BASE_MODEL):
-    __tablename__ = "sales"
-    __table_args__ = {"schema": "data"}
+# ── SALE_MODEL ────────────────────────────────────────────────────────────────
+class SALE_MODEL(BASE_MODEL):
+    __tablename__               = "sales"
+    __table_args__              = {"schema": "data"}
 
-    invoice_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
-    customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.customers.id", ondelete="SET NULL")
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    invoice_number              : Mapped[str]                       = mapped_column(String(50), unique=True, nullable=False, index=True)
+    customer_id                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.customers.id", ondelete="SET NULL"), nullable=True
     )
-    branch_id: Mapped[uuid.UUID] = mapped_column(
+    branch_id                   : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.branches.id", ondelete="RESTRICT"), nullable=False
     )
-    warehouse_id: Mapped[uuid.UUID] = mapped_column(
+    warehouse_id                : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.warehouses.id", ondelete="RESTRICT"), nullable=False
     )
-    subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    discount_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
-    tax_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
-    total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    payment_status: Mapped[str] = mapped_column(String(20), default="PENDING", nullable=False)
-    sale_status: Mapped[str] = mapped_column(String(20), default="DRAFT", nullable=False)
-    notes: Mapped[str | None] = mapped_column(Text)
-    cashier_id: Mapped[uuid.UUID] = mapped_column(
+    subtotal                    : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    discount_amount             : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    tax_amount                  : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    total                       : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    payment_status              : Mapped[str]                       = mapped_column(String(20), default="PENDING", nullable=False)
+    sale_status                 : Mapped[str]                       = mapped_column(String(20), default="DRAFT", nullable=False)
+    notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    cashier_id                  : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="RESTRICT"), nullable=False
     )
-    promotion_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.promotions.id", ondelete="SET NULL")
+    promotion_id                : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.promotions.id", ondelete="SET NULL"), nullable=True
     )
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    customer: Mapped[Customer | None] = relationship("Customer", back_populates="sales")
-    branch: Mapped[Branch] = relationship("Branch")
-    warehouse: Mapped[Warehouse] = relationship("Warehouse")
-    cashier: Mapped[User] = relationship("User")
-    promotion: Mapped[Promotion | None] = relationship("Promotion")
-    items: Mapped[list[SaleItem]] = relationship(
-        "SaleItem", back_populates="sale", cascade="all, delete-orphan", lazy="selectin"
+    customer                    : Mapped[Optional[CUSTOMER_MODEL]]  = relationship("CUSTOMER_MODEL", back_populates="sales")
+    branch                      : Mapped[BRANCH_MODEL]              = relationship("BRANCH_MODEL")
+    warehouse                   : Mapped[WAREHOUSE_MODEL]           = relationship("WAREHOUSE_MODEL")
+    cashier                     : Mapped[USER_MODEL]                = relationship("USER_MODEL")
+    promotion                   : Mapped[Optional[PROMOTION_MODEL]] = relationship("PROMOTION_MODEL")
+    items                       : Mapped[list[SALE_ITEM_MODEL]]     = relationship(
+        "SALE_ITEM_MODEL", back_populates="sale", cascade="all, delete-orphan", lazy="selectin"
     )
-    payments: Mapped[list[SalePayment]] = relationship(
-        "SalePayment", back_populates="sale", cascade="all, delete-orphan", lazy="selectin"
+    payments                    : Mapped[list[SALE_PAYMENT_MODEL]]  = relationship(
+        "SALE_PAYMENT_MODEL", back_populates="sale", cascade="all, delete-orphan", lazy="selectin"
     )
 
     @property
@@ -476,24 +526,27 @@ class Sale(UUID_BASE_MODEL):
         return getattr(cs, "full_name", None) or getattr(cs, "username", None)
 
 
-class SaleItem(UUID_BASE_MODEL):
-    __tablename__ = "sale_items"
-    __table_args__ = {"schema": "data"}
+# ── SALE_ITEM_MODEL ───────────────────────────────────────────────────────────
+class SALE_ITEM_MODEL(BASE_MODEL):
+    __tablename__               = "sale_items"
+    __table_args__              = {"schema": "data"}
 
-    sale_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    sale_id                     : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.sales.id", ondelete="CASCADE"), nullable=False
     )
-    variant_id: Mapped[uuid.UUID] = mapped_column(
+    variant_id                  : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.product_variants.id", ondelete="RESTRICT"), nullable=False
     )
-    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
-    unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    cost_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    discount_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
-    subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    quantity                    : Mapped[int]                       = mapped_column(Integer, nullable=False)
+    unit_price                  : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    cost_price                  : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    discount_amount             : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    subtotal                    : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    sale: Mapped[Sale] = relationship("Sale", back_populates="items")
-    variant: Mapped[ProductVariant] = relationship("ProductVariant")
+    sale                        : Mapped[SALE_MODEL]                = relationship("SALE_MODEL", back_populates="items")
+    variant                     : Mapped[PRODUCT_VARIANT_MODEL]     = relationship("PRODUCT_VARIANT_MODEL")
 
     @property
     def sku(self) -> str | None:
@@ -525,271 +578,270 @@ class SaleItem(UUID_BASE_MODEL):
         return getattr(s, "name", None) if s is not None else None
 
 
-class SalePayment(UUID_BASE_MODEL):
-    __tablename__ = "sale_payments"
-    __table_args__ = {"schema": "data"}
+# ── SALE_PAYMENT_MODEL ────────────────────────────────────────────────────────
+class SALE_PAYMENT_MODEL(BASE_MODEL):
+    __tablename__               = "sale_payments"
+    __table_args__              = {"schema": "data"}
 
-    sale_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    sale_id                     : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.sales.id", ondelete="CASCADE"), nullable=False
     )
-    payment_method: Mapped[str] = mapped_column(String(30), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    reference_number: Mapped[str | None] = mapped_column(String(100))
-    notes: Mapped[str | None] = mapped_column(Text)
+    payment_method              : Mapped[str]                       = mapped_column(String(30), nullable=False)
+    amount                      : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    reference_number            : Mapped[Optional[str]]             = mapped_column(String(100), nullable=True)
+    notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    sale: Mapped[Sale] = relationship("Sale", back_populates="payments")
+    sale                        : Mapped[SALE_MODEL]                = relationship("SALE_MODEL", back_populates="payments")
 
 
-class Return(UUID_BASE_MODEL):
-    __tablename__ = "returns"
-    __table_args__ = {"schema": "data"}
+# ── RETURN_MODEL ──────────────────────────────────────────────────────────────
+class RETURN_MODEL(BASE_MODEL):
+    __tablename__               = "returns"
+    __table_args__              = {"schema": "data"}
 
-    return_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    original_sale_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    return_number               : Mapped[str]                       = mapped_column(String(50), unique=True, nullable=False)
+    original_sale_id            : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.sales.id", ondelete="RESTRICT"), nullable=False
     )
-    customer_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.customers.id", ondelete="SET NULL")
+    customer_id                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.customers.id", ondelete="SET NULL"), nullable=True
     )
-    branch_id: Mapped[uuid.UUID] = mapped_column(
+    branch_id                   : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.branches.id", ondelete="RESTRICT"), nullable=False
     )
-    return_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    reason: Mapped[str | None] = mapped_column(Text)
-    total_refund: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    processed_by: Mapped[uuid.UUID] = mapped_column(
+    return_type                 : Mapped[str]                       = mapped_column(String(20), nullable=False)
+    reason                      : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    total_refund                : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    processed_by                : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="RESTRICT"), nullable=False
     )
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    original_sale: Mapped[Sale] = relationship("Sale")
-    items: Mapped[list[ReturnItem]] = relationship(
-        "ReturnItem", back_populates="return_record", cascade="all, delete-orphan", lazy="selectin"
+    original_sale               : Mapped[SALE_MODEL]                = relationship("SALE_MODEL")
+    items                       : Mapped[list[RETURN_ITEM_MODEL]]   = relationship(
+        "RETURN_ITEM_MODEL", back_populates="return_record", cascade="all, delete-orphan", lazy="selectin"
     )
-    refund_payments: Mapped[list[ReturnPayment]] = relationship(
-        "ReturnPayment", back_populates="return_record", cascade="all, delete-orphan", lazy="selectin"
+    refund_payments             : Mapped[list[RETURN_PAYMENT_MODEL]] = relationship(
+        "RETURN_PAYMENT_MODEL", back_populates="return_record", cascade="all, delete-orphan", lazy="selectin"
     )
 
 
-class ReturnItem(UUID_BASE_MODEL):
-    __tablename__ = "return_items"
-    __table_args__ = {"schema": "data"}
+# ── RETURN_ITEM_MODEL ─────────────────────────────────────────────────────────
+class RETURN_ITEM_MODEL(BASE_MODEL):
+    __tablename__               = "return_items"
+    __table_args__              = {"schema": "data"}
 
-    return_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    return_id                   : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.returns.id", ondelete="CASCADE"), nullable=False
     )
-    sale_item_id: Mapped[uuid.UUID] = mapped_column(
+    sale_item_id                : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.sale_items.id", ondelete="RESTRICT"), nullable=False
     )
-    variant_id: Mapped[uuid.UUID] = mapped_column(
+    variant_id                  : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.product_variants.id", ondelete="RESTRICT"), nullable=False
     )
-    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
-    unit_price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    quantity                    : Mapped[int]                       = mapped_column(Integer, nullable=False)
+    unit_price                  : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    subtotal                    : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    return_record: Mapped[Return] = relationship("Return", back_populates="items")
-    variant: Mapped[ProductVariant] = relationship("ProductVariant")
+    return_record               : Mapped[RETURN_MODEL]              = relationship("RETURN_MODEL", back_populates="items")
+    variant                     : Mapped[PRODUCT_VARIANT_MODEL]     = relationship("PRODUCT_VARIANT_MODEL")
 
 
-class ReturnPayment(UUID_BASE_MODEL):
-    __tablename__ = "return_payments"
-    __table_args__ = {"schema": "data"}
+# ── RETURN_PAYMENT_MODEL ──────────────────────────────────────────────────────
+class RETURN_PAYMENT_MODEL(BASE_MODEL):
+    __tablename__               = "return_payments"
+    __table_args__              = {"schema": "data"}
 
-    return_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    return_id                   : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.returns.id", ondelete="CASCADE"), nullable=False
     )
-    payment_method: Mapped[str] = mapped_column(String(30), nullable=False)
-    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    payment_method              : Mapped[str]                       = mapped_column(String(30), nullable=False)
+    amount                      : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    return_record: Mapped[Return] = relationship("Return", back_populates="refund_payments")
+    return_record               : Mapped[RETURN_MODEL]              = relationship("RETURN_MODEL", back_populates="refund_payments")
 
 
-# ── Customer & Loyalty ────────────────────────────────────────────────────────
-class Customer(UUID_BASE_MODEL):
-    __tablename__ = "customers"
-    __table_args__ = {"schema": "data"}
+# ── CUSTOMER_MODEL ────────────────────────────────────────────────────────────
+class CUSTOMER_MODEL(BASE_MODEL):
+    __tablename__               = "customers"
+    __table_args__              = {"schema": "data"}
 
-    customer_code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    phone: Mapped[str | None] = mapped_column(String(50), index=True)
-    email: Mapped[str | None] = mapped_column(String(255), index=True)
-    address: Mapped[str | None] = mapped_column(Text)
-    date_of_birth: Mapped[date | None] = mapped_column(Date)
-    notes: Mapped[str | None] = mapped_column(Text)
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_code               : Mapped[str]                       = mapped_column(String(50), unique=True, nullable=False, index=True)
+    name                        : Mapped[str]                       = mapped_column(String(200), nullable=False)
+    phone                       : Mapped[Optional[str]]             = mapped_column(String(50), index=True, nullable=True)
+    email                       : Mapped[Optional[str]]             = mapped_column(String(255), index=True, nullable=True)
+    address                     : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    date_of_birth               : Mapped[Optional[date]]            = mapped_column(Date, nullable=True)
+    notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    sales: Mapped[list[Sale]] = relationship("Sale", back_populates="customer")
-    loyalty_account: Mapped[LoyaltyAccount | None] = relationship(
-        "LoyaltyAccount", back_populates="customer", uselist=False
+    sales                       : Mapped[list[SALE_MODEL]]          = relationship("SALE_MODEL", back_populates="customer")
+    loyalty_account             : Mapped[Optional[LOYALTY_ACCOUNT_MODEL]] = relationship(
+        "LOYALTY_ACCOUNT_MODEL", back_populates="customer", uselist=False
     )
 
 
-class LoyaltyAccount(UUID_BASE_MODEL):
-    __tablename__ = "loyalty_accounts"
-    __table_args__ = (
+# ── LOYALTY_ACCOUNT_MODEL ─────────────────────────────────────────────────────
+class LOYALTY_ACCOUNT_MODEL(BASE_MODEL):
+    __tablename__               = "loyalty_accounts"
+    __table_args__              = (
         UniqueConstraint("customer_id", name="uq_loyalty_customer"),
         {"schema": "data"},
     )
 
-    customer_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id                 : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.customers.id", ondelete="CASCADE"), nullable=False
     )
-    points_balance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    total_points_earned: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    total_points_redeemed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    tier: Mapped[str] = mapped_column(String(20), default="BRONZE", nullable=False)
+    points_balance              : Mapped[int]                       = mapped_column(Integer, default=0, nullable=False)
+    total_points_earned         : Mapped[int]                       = mapped_column(Integer, default=0, nullable=False)
+    total_points_redeemed       : Mapped[int]                       = mapped_column(Integer, default=0, nullable=False)
+    tier                        : Mapped[str]                       = mapped_column(String(20), default="BRONZE", nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    customer: Mapped[Customer] = relationship("Customer", back_populates="loyalty_account")
-    transactions: Mapped[list[LoyaltyTransaction]] = relationship(
-        "LoyaltyTransaction", back_populates="account", cascade="all, delete-orphan"
+    customer                    : Mapped[CUSTOMER_MODEL]            = relationship("CUSTOMER_MODEL", back_populates="loyalty_account")
+    transactions                : Mapped[list[LOYALTY_TRANSACTION_MODEL]] = relationship(
+        "LOYALTY_TRANSACTION_MODEL", back_populates="account", cascade="all, delete-orphan"
     )
 
 
-class LoyaltyTransaction(UUID_BASE_MODEL):
-    __tablename__ = "loyalty_transactions"
-    __table_args__ = {"schema": "data"}
+# ── LOYALTY_TRANSACTION_MODEL ─────────────────────────────────────────────────
+class LOYALTY_TRANSACTION_MODEL(BASE_MODEL):
+    __tablename__               = "loyalty_transactions"
+    __table_args__              = {"schema": "data"}
 
-    account_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id                  : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.loyalty_accounts.id", ondelete="CASCADE"), nullable=False
     )
-    transaction_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    points: Mapped[int] = mapped_column(Integer, nullable=False)
-    reference_type: Mapped[str | None] = mapped_column(String(50))
-    reference_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    note: Mapped[str | None] = mapped_column(Text)
+    transaction_type            : Mapped[str]                       = mapped_column(String(20), nullable=False)
+    points                      : Mapped[int]                       = mapped_column(Integer, nullable=False)
+    reference_type              : Mapped[Optional[str]]             = mapped_column(String(50), nullable=True)
+    reference_id                : Mapped[Optional[uuid.UUID]]       = mapped_column(UUID(as_uuid=True), nullable=True)
+    note                        : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    account: Mapped[LoyaltyAccount] = relationship("LoyaltyAccount", back_populates="transactions")
+    account                     : Mapped[LOYALTY_ACCOUNT_MODEL]     = relationship("LOYALTY_ACCOUNT_MODEL", back_populates="transactions")
 
 
-# ── PaymentTransaction ────────────────────────────────────────────────────────
-class PaymentTransaction(UUID_BASE_MODEL):
-    __tablename__ = "payment_transactions"
-    __table_args__ = {"schema": "data"}
+# ── PAYMENT_TRANSACTION_MODEL ─────────────────────────────────────────────────
+class PAYMENT_TRANSACTION_MODEL(BASE_MODEL):
+    __tablename__               = "payment_transactions"
+    __table_args__              = {"schema": "data"}
 
-    provider: Mapped[str] = mapped_column(String(30), nullable=False, default="ABA_PAYWAY")
-    tran_id: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
-    sale_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.sales.id", ondelete="SET NULL"), index=True
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider                    : Mapped[str]                       = mapped_column(String(30), nullable=False, default="ABA_PAYWAY")
+    tran_id                     : Mapped[str]                       = mapped_column(String(20), unique=True, nullable=False, index=True)
+    sale_id                     : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.sales.id", ondelete="SET NULL"), index=True, nullable=True
     )
-    channel: Mapped[str] = mapped_column(String(10), nullable=False, default="POS")
-    payment_option: Mapped[str] = mapped_column(String(30), nullable=False, default="abapay_khqr_deeplink")
-    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
-    apv: Mapped[str | None] = mapped_column(String(30))
-    qr_string: Mapped[str | None] = mapped_column(Text)
-    checkout_url: Mapped[str | None] = mapped_column(Text)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    request_payload: Mapped[dict | None] = mapped_column(JSONB)
-    last_response: Mapped[dict | None] = mapped_column(JSONB)
-    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL")
+    channel                     : Mapped[str]                       = mapped_column(String(10), nullable=False, default="POS")
+    payment_option              : Mapped[str]                       = mapped_column(String(30), nullable=False, default="abapay_khqr_deeplink")
+    amount                      : Mapped[float]                     = mapped_column(Numeric(12, 2), nullable=False)
+    currency                    : Mapped[str]                       = mapped_column(String(3), nullable=False, default="USD")
+    apv                         : Mapped[Optional[str]]             = mapped_column(String(30), nullable=True)
+    qr_string                   : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    checkout_url                : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    expires_at                  : Mapped[Optional[datetime]]        = mapped_column(DateTime(timezone=True), nullable=True)
+    paid_at                     : Mapped[Optional[datetime]]        = mapped_column(DateTime(timezone=True), nullable=True)
+    request_payload             : Mapped[Optional[dict]]            = mapped_column(JSONB, nullable=True)
+    last_response               : Mapped[Optional[dict]]            = mapped_column(JSONB, nullable=True)
+    created_by_user_id          : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL"), nullable=True
     )
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    sale: Mapped[Sale | None] = relationship("Sale")
+    sale                        : Mapped[Optional[SALE_MODEL]]      = relationship("SALE_MODEL")
 
 
-# ── Expense, Promotion, AuditLog & Notification ───────────────────────────────
-class Expense(UUID_BASE_MODEL):
-    __tablename__ = "expenses"
-    __table_args__ = {"schema": "data"}
+# ── EXPENSE_MODEL ─────────────────────────────────────────────────────────────
+class EXPENSE_MODEL(BASE_MODEL):
+    __tablename__               = "expenses"
+    __table_args__              = {"schema": "data"}
 
-    expense_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
-    category_id: Mapped[uuid.UUID] = mapped_column(
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    expense_number              : Mapped[str]                       = mapped_column(String(50), unique=True, nullable=False)
+    category_id                 : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("base_data.expense_categories.id", ondelete="RESTRICT"), nullable=False
     )
-    branch_id: Mapped[uuid.UUID] = mapped_column(
+    branch_id                   : Mapped[uuid.UUID]                 = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.branches.id", ondelete="RESTRICT"), nullable=False
     )
-    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text)
-    payment_method: Mapped[str] = mapped_column(String(30), nullable=False)
-    receipt_url: Mapped[str | None] = mapped_column(String(500))
-    expense_date: Mapped[date] = mapped_column(Date, nullable=False)
-    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+    amount                      : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    description                 : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    payment_method              : Mapped[str]                       = mapped_column(String(30), nullable=False)
+    receipt_url                 : Mapped[Optional[str]]             = mapped_column(String(500), nullable=True)
+    expense_date                : Mapped[date]                      = mapped_column(Date, nullable=False)
+    created_by_user_id          : Mapped[Optional[uuid.UUID]]       = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="RESTRICT"), nullable=True
     )
-    approved_by: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL")
+    approved_by                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL"), nullable=True
     )
-    notes: Mapped[str | None] = mapped_column(Text)
+    notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    category: Mapped[ExpenseCategory] = relationship("ExpenseCategory")
+    category                    : Mapped[EXPENSE_CATEGORY_MODEL]    = relationship("EXPENSE_CATEGORY_MODEL")
 
 
-class Promotion(UUID_BASE_MODEL):
-    __tablename__ = "promotions"
-    __table_args__ = {"schema": "data"}
+# ── PROMOTION_MODEL ───────────────────────────────────────────────────────────
+class PROMOTION_MODEL(BASE_MODEL):
+    __tablename__               = "promotions"
+    __table_args__              = {"schema": "data"}
 
-    name: Mapped[str] = mapped_column(String(200), nullable=False)
-    type: Mapped[str] = mapped_column(String(30), nullable=False)
-    value: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    code: Mapped[str | None] = mapped_column(String(100), unique=True, index=True)
-    min_purchase_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, nullable=False)
-    max_discount_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    usage_limit: Mapped[int | None] = mapped_column(Integer)
-    usage_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    applies_to: Mapped[str] = mapped_column(String(20), default="ALL", nullable=False)
-    category_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("base_data.categories.id", ondelete="SET NULL")
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name                        : Mapped[str]                       = mapped_column(String(200), nullable=False)
+    type                        : Mapped[str]                       = mapped_column(String(30), nullable=False)
+    value                       : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False)
+    code                        : Mapped[Optional[str]]             = mapped_column(String(100), unique=True, index=True, nullable=True)
+    min_purchase_amount         : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    max_discount_amount         : Mapped[Optional[Decimal]]         = mapped_column(Numeric(12, 2), nullable=True)
+    usage_limit                 : Mapped[Optional[int]]             = mapped_column(Integer, nullable=True)
+    usage_count                 : Mapped[int]                       = mapped_column(Integer, default=0, nullable=False)
+    applies_to                  : Mapped[str]                       = mapped_column(String(20), default="ALL", nullable=False)
+    category_id                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("base_data.categories.id", ondelete="SET NULL"), nullable=True
     )
-    start_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    end_datetime: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    start_datetime              : Mapped[datetime]                  = mapped_column(DateTime(timezone=True), nullable=False)
+    end_datetime                : Mapped[datetime]                  = mapped_column(DateTime(timezone=True), nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
 
-class AuditLog(UUID_BASE_MODEL):
-    __tablename__ = "audit_logs"
-    __table_args__ = {"schema": "data"}
+# ── AUDIT_LOG_MODEL ───────────────────────────────────────────────────────────
+class AUDIT_LOG_MODEL(BASE_MODEL):
+    __tablename__               = "audit_logs"
+    __table_args__              = {"schema": "data"}
 
-    user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL")
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id                     : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL"), nullable=True
     )
-    action: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
-    entity_type: Mapped[str | None] = mapped_column(String(100))
-    entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
-    old_data: Mapped[dict | None] = mapped_column(JSONB)
-    new_data: Mapped[dict | None] = mapped_column(JSONB)
-    ip_address: Mapped[str | None] = mapped_column(String(45))
-    user_agent: Mapped[str | None] = mapped_column(String(500))
+    action                      : Mapped[str]                       = mapped_column(String(50), nullable=False, index=True)
+    entity_type                 : Mapped[Optional[str]]             = mapped_column(String(100), nullable=True)
+    entity_id                   : Mapped[Optional[uuid.UUID]]       = mapped_column(UUID(as_uuid=True), nullable=True)
+    old_data                    : Mapped[Optional[dict]]            = mapped_column(JSONB, nullable=True)
+    new_data                    : Mapped[Optional[dict]]            = mapped_column(JSONB, nullable=True)
+    ip_address                  : Mapped[Optional[str]]             = mapped_column(String(45), nullable=True)
+    user_agent                  : Mapped[Optional[str]]             = mapped_column(String(500), nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
 
-class NotificationSetting(UUID_BASE_MODEL):
-    __tablename__ = "notification_settings"
-    __table_args__ = {"schema": "data"}
+# ── NOTIFICATION_SETTING_MODEL ────────────────────────────────────────────────
+class NOTIFICATION_SETTING_MODEL(BASE_MODEL):
+    __tablename__               = "notification_settings"
+    __table_args__              = {"schema": "data"}
 
-    key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
-    value: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    description: Mapped[str | None] = mapped_column(Text)
-
-
-# Model Aliases
-USER_MODEL                 = User
-REFRESH_TOKEN_MODEL        = RefreshToken
-BRANCH_MODEL               = Branch
-WAREHOUSE_MODEL            = Warehouse
-SUPPLIER_MODEL             = Supplier
-PRODUCT_MODEL              = Product
-PRODUCT_VARIANT_MODEL      = ProductVariant
-CATALOG_VERSION_MODEL      = CatalogVersion
-INVENTORY_STOCK_MODEL      = InventoryStock
-INVENTORY_MOVEMENT_MODEL   = InventoryMovement
-STOCK_TRANSFER_MODEL       = StockTransfer
-STOCK_TRANSFER_ITEM_MODEL  = StockTransferItem
-PURCHASE_ORDER_MODEL       = PurchaseOrder
-PURCHASE_ITEM_MODEL        = PurchaseItem
-GOODS_RECEIPT_MODEL        = GoodsReceipt
-GOODS_RECEIPT_ITEM_MODEL   = GoodsReceiptItem
-SALE_MODEL                 = Sale
-SALE_ITEM_MODEL            = SaleItem
-SALE_PAYMENT_MODEL         = SalePayment
-RETURN_MODEL               = Return
-RETURN_ITEM_MODEL          = ReturnItem
-RETURN_PAYMENT_MODEL       = ReturnPayment
-CUSTOMER_MODEL             = Customer
-LOYALTY_ACCOUNT_MODEL      = LoyaltyAccount
-LOYALTY_TRANSACTION_MODEL  = LoyaltyTransaction
-PAYMENT_TRANSACTION_MODEL  = PaymentTransaction
-EXPENSE_MODEL              = Expense
-PROMOTION_MODEL            = Promotion
-AUDIT_LOG_MODEL            = AuditLog
-NOTIFICATION_SETTING_MODEL = NotificationSetting
-
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    key                         : Mapped[str]                       = mapped_column(String(100), unique=True, nullable=False)
+    value                       : Mapped[dict]                      = mapped_column(JSONB, nullable=False, default=dict)
+    description                 : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)

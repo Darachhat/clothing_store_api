@@ -3,14 +3,24 @@ from __future__ import annotations
 
 import hashlib
 from datetime import UTC, datetime, timedelta, timezone
-from typing import List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import HTTPException, Request, status
+from fastapi import Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.exceptions import BAD_REQUEST_EXCEPTION, NOT_FOUND_EXCEPTION
+from app.core.enum.common_enum import (
+    COMMON_STATUS_ENUM
+    , STATUS_CODE_ENUM
+)
+from app.core.exceptions import (
+    BAD_REQUEST_EXCEPTION
+    , FORBIDDEN_EXCEPTION
+    , NOT_FOUND_EXCEPTION
+    , UNAUTHORIZED_EXCEPTION
+)
+from app.core.logging import get_logger
 from app.core.security import (
     create_access_token
     , create_refresh_token
@@ -18,16 +28,24 @@ from app.core.security import (
     , verify_password
 )
 from app.core.utils.crypto_utils import generate_api_key, hash_api_key
-from app.models import SYSTEM_CLIENT_MODEL
 from app.models import RefreshToken, User
+from app.models import SYSTEM_CLIENT_MODEL
 from app.repositories.user_repository import RefreshTokenRepository, UserRepository
 from app.schemas.auth_schema import (
-    SYSTEM_CLIENT_CREATE_SCHEMA
+    CHANGE_PASSWORD_REQUEST_SCHEMA
+    , LOGIN_REQUEST_SCHEMA
+    , LOGOUT_REQUEST_SCHEMA
+    , REFRESH_REQUEST_SCHEMA
+    , SYSTEM_CLIENT_CREATE_SCHEMA
     , SYSTEM_CLIENT_RESPONSE_SCHEMA
 )
 
+logger = get_logger(__name__)
+
 
 class AUTH_SERVICE:
+    """Service orchestrating User RBAC JWT credential issuance and System Client API keys."""
+
     def __init__(self, db: AsyncSession) -> None:
         self.db         = db
         self.user_repo  = UserRepository(db)
@@ -39,19 +57,14 @@ class AUTH_SERVICE:
         self
         , username : str
         , password : str
-        , request  : Request | None = None
-    ) -> dict:
+        , request  : Optional[Request] = None
+    ) -> Dict[str, Any]:
         user = await self.user_repo.get_by_username(username)
         if not user or not verify_password(password, user.hashed_password):
-            raise HTTPException(
-                status_code = status.HTTP_401_UNAUTHORIZED
-                , detail    = "Invalid username or password"
-            )
-        if user.status != "ACTIVE":
-            raise HTTPException(
-                status_code = status.HTTP_403_FORBIDDEN
-                , detail    = "Account is not active"
-            )
+            raise UNAUTHORIZED_EXCEPTION("Invalid username or password")
+
+        if user.status != COMMON_STATUS_ENUM.ACTIVE.value:
+            raise FORBIDDEN_EXCEPTION("Account is not active")
 
         user.last_login_at = datetime.now(UTC)
 
@@ -77,26 +90,20 @@ class AUTH_SERVICE:
             , "user"          : user
         }
 
-    async def refresh(self, refresh_token: str) -> dict:
+    async def refresh(self, refresh_token: str) -> Dict[str, Any]:
         token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
         stored     = await self.token_repo.get_by_hash(token_hash)
 
         if not stored or stored.revoked:
-            raise HTTPException(
-                status_code = status.HTTP_401_UNAUTHORIZED
-                , detail    = "Invalid or revoked refresh token"
-            )
+            raise UNAUTHORIZED_EXCEPTION("Invalid or revoked refresh token")
         if stored.expires_at.replace(tzinfo=UTC) < datetime.now(UTC):
-            raise HTTPException(
-                status_code = status.HTTP_401_UNAUTHORIZED
-                , detail    = "Refresh token expired"
-            )
+            raise UNAUTHORIZED_EXCEPTION("Refresh token expired")
 
         stored.revoked = True
 
         user = await self.user_repo.get_by_id(stored.user_id)
-        if not user or user.status != "ACTIVE":
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        if not user or user.status != COMMON_STATUS_ENUM.ACTIVE.value:
+            raise UNAUTHORIZED_EXCEPTION("User not found")
 
         new_access  = create_access_token(str(user.id))
         new_refresh = create_refresh_token(str(user.id))
@@ -130,12 +137,48 @@ class AUTH_SERVICE:
         , new_password     : str
     ) -> None:
         if not verify_password(current_password, user.hashed_password):
-            raise HTTPException(
-                status_code = status.HTTP_400_BAD_REQUEST
-                , detail    = "Current password is incorrect"
-            )
+            raise BAD_REQUEST_EXCEPTION("Current password is incorrect")
         user.hashed_password = hash_password(new_password)
         await self.db.commit()
+
+    async def login_payload(
+        self
+        , payload : LOGIN_REQUEST_SCHEMA
+        , request : Optional[Request] = None
+    ) -> Dict[str, Any]:
+        """Authenticate user using structured LOGIN_REQUEST_SCHEMA."""
+        return await self.login(
+            username = payload.username
+            , password = payload.password
+            , request  = request
+        )
+
+    async def refresh_payload(
+        self
+        , payload : REFRESH_REQUEST_SCHEMA
+    ) -> Dict[str, Any]:
+        """Refresh JWT tokens using structured REFRESH_REQUEST_SCHEMA."""
+        return await self.refresh(refresh_token=payload.refresh_token)
+
+    async def logout_payload(
+        self
+        , payload : LOGOUT_REQUEST_SCHEMA
+    ) -> None:
+        """Revoke refresh token using structured LOGOUT_REQUEST_SCHEMA."""
+        await self.logout(refresh_token=payload.refresh_token)
+
+    async def change_password_payload(
+        self
+        , user    : User
+        , payload : CHANGE_PASSWORD_REQUEST_SCHEMA
+    ) -> None:
+        """Update user password using structured CHANGE_PASSWORD_REQUEST_SCHEMA."""
+        await self.change_password(
+            user             = user
+            , current_password = payload.current_password
+            , new_password     = payload.new_password
+        )
+
 
     # ── System Client API Key Authentication (Enterprise Template) ────────────
 
@@ -163,7 +206,7 @@ class AUTH_SERVICE:
             , name         = data.name
             , api_key_hash = api_key_hash
             , description  = data.description
-            , status_code  = "active"
+            , status_code  = STATUS_CODE_ENUM.ACTIVE.value
             , created_by   = "admin"
         )
         db.add(client)
@@ -198,7 +241,7 @@ class AUTH_SERVICE:
         if not client:
             raise NOT_FOUND_EXCEPTION(f"System client '{code}' was not found.")
 
-        client.status_code      = "inactive"
+        client.status_code      = STATUS_CODE_ENUM.INACTIVE.value
         client.updated_datetime = datetime.now(timezone.utc)
         client.updated_by       = "admin"
         db.commit()
@@ -216,7 +259,7 @@ class AUTH_SERVICE:
             .filter(
                 SYSTEM_CLIENT_MODEL.code == client_code
                 , SYSTEM_CLIENT_MODEL.deleted_datetime.is_(None)
-                , SYSTEM_CLIENT_MODEL.status_code.in_(["active", "ACTIVE"])
+                , SYSTEM_CLIENT_MODEL.status_code.in_([STATUS_CODE_ENUM.ACTIVE.value, COMMON_STATUS_ENUM.ACTIVE.value])
             )
             .first()
         )
@@ -225,6 +268,3 @@ class AUTH_SERVICE:
             return False
 
         return client.api_key_hash == hash_api_key(raw_api_key)
-
-
-AuthService = AUTH_SERVICE

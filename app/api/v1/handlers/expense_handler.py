@@ -20,7 +20,7 @@ from app.schemas.expense_schema import (
     EXPENSE_RESPONSE_SCHEMA,
     EXPENSE_UPDATE_SCHEMA,
 )
-from app.services.misc_service import ExpenseService
+from app.services.misc_service import EXPENSE_SERVICE
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
@@ -125,7 +125,7 @@ async def create_expense(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Expense:
-    service = ExpenseService(db)
+    service = EXPENSE_SERVICE(db)
     is_privileged = any(r.name in ["ADMIN", "MANAGER"] for r in current_user.roles)
     expense = await service.create_expense(
         created_by=current_user.id,
@@ -175,7 +175,7 @@ async def update_expense(
                 detail="Cannot edit an expense that has already been approved or rejected",
             )
 
-    service = ExpenseService(db)
+    service = EXPENSE_SERVICE(db)
     expense = await service.update_expense(expense_id=expense_id, data=payload)
     await db.commit()
     return expense
@@ -187,7 +187,7 @@ async def approve_expense(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("settings.manage")),
 ) -> Expense:
-    service = ExpenseService(db)
+    service = EXPENSE_SERVICE(db)
     expense = await service.approve_expense(expense_id=expense_id, approved_by=current_user.id)
     await db.commit()
     return expense
@@ -199,7 +199,7 @@ async def reject_expense(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("settings.manage")),
 ) -> Expense:
-    service = ExpenseService(db)
+    service = EXPENSE_SERVICE(db)
     expense = await service.reject_expense(expense_id=expense_id, rejected_by=current_user.id)
     await db.commit()
     return expense

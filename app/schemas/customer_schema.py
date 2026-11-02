@@ -143,8 +143,10 @@ class CUSTOMER_LIST_OUT_SCHEMA(BaseModel):
 
 
 class ADJUST_POINTS_REQUEST_SCHEMA(BaseModel):
-    points : int
-    note   : Optional[str] = None
+    points         : int
+    note           : Optional[str]       = None
+    reference_type : Optional[str]       = None
+    reference_id   : Optional[uuid.UUID] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -159,6 +161,28 @@ class ADJUST_POINTS_REQUEST_SCHEMA(BaseModel):
         return out
 
 
+LOYALTY_ADJUST_REQUEST_SCHEMA = ADJUST_POINTS_REQUEST_SCHEMA
+
+
+class LOYALTY_AWARD_REQUEST_SCHEMA(BaseModel):
+    customer_id    : uuid.UUID
+    points         : int
+    sale_id        : uuid.UUID
+    invoice_number : str
+
+    model_config = {"from_attributes": True}
+
+
+class LOYALTY_CLAWBACK_REQUEST_SCHEMA(BaseModel):
+    customer_id    : uuid.UUID
+    points         : int
+    reference_type : str
+    reference_id   : uuid.UUID
+    note           : str
+
+    model_config = {"from_attributes": True}
+
+
 __all__ = [
     "LOYALTY_TRANSACTION_RESPONSE_SCHEMA",
     "LOYALTY_ACCOUNT_RESPONSE_SCHEMA",
@@ -168,5 +192,9 @@ __all__ = [
     "CUSTOMER_RESPONSE_SCHEMA",
     "CUSTOMER_LIST_OUT_SCHEMA",
     "ADJUST_POINTS_REQUEST_SCHEMA",
+    "LOYALTY_ADJUST_REQUEST_SCHEMA",
+    "LOYALTY_AWARD_REQUEST_SCHEMA",
+    "LOYALTY_CLAWBACK_REQUEST_SCHEMA",
 ]
+
 

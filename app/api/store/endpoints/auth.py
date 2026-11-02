@@ -15,7 +15,7 @@ from app.api.store.auth import require_customer
 from app.core.database import get_db
 from app.models import User
 from app.schemas.auth_schema import LOGIN_REQUEST_SCHEMA, LOGIN_RESPONSE_SCHEMA, REFRESH_REQUEST_SCHEMA, TOKEN_RESPONSE_SCHEMA
-from app.services.auth_service import AuthService
+from app.services.auth_service import AUTH_SERVICE
 
 router = APIRouter(prefix="/auth", tags=["Store Auth"])
 
@@ -94,7 +94,7 @@ async def customer_login(
                 detail="This endpoint is for customer accounts only.",
             )
 
-    service = AuthService(db)
+    service = AUTH_SERVICE(db)
     result = await service.login(body.username, body.password, request)
     return LOGIN_RESPONSE_SCHEMA(**result)
 
@@ -104,7 +104,7 @@ async def customer_refresh(
     body: REFRESH_REQUEST_SCHEMA,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TOKEN_RESPONSE_SCHEMA:
-    service = AuthService(db)
+    service = AUTH_SERVICE(db)
     result = await service.refresh(body.refresh_token)
     return TOKEN_RESPONSE_SCHEMA(**result)
 

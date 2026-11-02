@@ -2,7 +2,7 @@
 
 Beat schedule (defined here, registered in celery_app.py):
 - reconcile_pending_payments: every 60 seconds
-  - re-checks every PENDING transaction with ABA through PaymentService.refresh_status,
+  - re-checks every PENDING transaction with ABA through PAYMENT_SERVICE.refresh_status,
     i.e. the exact same code path the POS poller uses (so a sale completed by the
     reconciler gets stock movements, payments etc. — never a half-completed sale)
   - marks overdue ones EXPIRED (only AFTER a final check with ABA, so a QR paid in the
@@ -34,7 +34,7 @@ async def _reconcile() -> dict:
 
     from app.core.config import settings
     from app.models import PaymentTransaction
-    from app.services.payment_service import PaymentService
+    from app.services.payment_service import PAYMENT_SERVICE
     from app.services.payway import payway_client
 
     # asyncio.run() creates a fresh event loop on every task run, so the global
@@ -57,7 +57,7 @@ async def _reconcile() -> dict:
             async with session_factory() as db:
                 try:
                     # Final check with ABA; completes the sale properly on APPROVED.
-                    tx = await PaymentService(db).refresh_status(tx_id)
+                    tx = await PAYMENT_SERVICE(db).refresh_status(tx_id)
                     now = datetime.now(timezone.utc)
 
                     if tx.status == "APPROVED":

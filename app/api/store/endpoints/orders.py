@@ -21,9 +21,9 @@ from app.models import ProductVariant
 from app.models import Sale, SaleItem
 from app.models import User
 from app.repositories.user_repository import UserRepository
-from app.services.misc_service import PromotionService
-from app.services.product_service import ProductService
-from app.services.sale_service import SaleService
+from app.services.misc_service import PROMOTION_SERVICE
+from app.services.product_service import PRODUCT_SERVICE
+from app.services.sale_service import SALE_SERVICE
 from app.utils.generators import generate_customer_code
 
 router = APIRouter(prefix="/orders", tags=["Store Orders"])
@@ -170,10 +170,10 @@ async def _load_online_order(
 async def _verify_and_settle_payment(db: AsyncSession, sale: Sale) -> None:
     """Re-check the latest PENDING ABA transaction of the order with ABA itself.
 
-    `PaymentService.refresh_status` is the only code path allowed to mark an online
+    `PAYMENT_SERVICE.refresh_status` is the only code path allowed to mark an online
     order as paid: it asks ABA and completes the sale on APPROVED.
     """
-    from app.services.payment_service import PaymentService
+    from app.services.payment_service import PAYMENT_SERVICE
 
     tx_id = (
         await db.execute(
@@ -187,7 +187,7 @@ async def _verify_and_settle_payment(db: AsyncSession, sale: Sale) -> None:
         )
     ).scalar_one_or_none()
     if tx_id:
-        await PaymentService(db).refresh_status(tx_id)
+        await PAYMENT_SERVICE(db).refresh_status(tx_id)
         await db.commit()
 
 
@@ -197,7 +197,7 @@ async def validate_store_coupon(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """Validate a promo/coupon code against the customer's bag subtotal."""
-    promo_service = PromotionService(db)
+    promo_service = PROMOTION_SERVICE(db)
     res = await promo_service.validate_coupon(body.code.strip(), cart_total=body.cart_total)
     return {
         "valid": res.valid,
@@ -218,7 +218,7 @@ async def create_store_order(
     """Create a storefront order in DRAFT state.
 
     Orders are never marked paid here. Payment is confirmed server-side only, after the
-    ABA gateway reports APPROVED (see ``PaymentService.refresh_status``); stock is
+    ABA gateway reports APPROVED (see ``PAYMENT_SERVICE.refresh_status``); stock is
     deducted at that moment.
     """
     # 1. Resolve acting user ID for Sale.cashier_id
@@ -258,7 +258,7 @@ async def create_store_order(
             customer_id = new_cust.id
 
     # 3. Prepare items & calculate cart total for optional coupon validation
-    sale_service = SaleService(db)
+    sale_service = SALE_SERVICE(db)
     items_data = []
     estimated_subtotal = Decimal("0")
     for item in payload.items:
@@ -281,7 +281,7 @@ async def create_store_order(
     discount_amount = Decimal("0")
     promotion_id: UUID | None = None
     if payload.coupon_code:
-        promo_service = PromotionService(db)
+        promo_service = PROMOTION_SERVICE(db)
         coupon_res = await promo_service.validate_coupon(
             payload.coupon_code.strip(), cart_total=estimated_subtotal
         )
@@ -331,12 +331,12 @@ async def create_store_order_khqr(
     """
     import base64
 
-    from app.services.payment_service import PaymentService
+    from app.services.payment_service import PAYMENT_SERVICE
     from app.utils.qr import generate_qr_png
 
     sale = await _load_online_order(db, order_id, current_customer)
 
-    tx = await PaymentService(db).create_khqr_for_sale(
+    tx = await PAYMENT_SERVICE(db).create_khqr_for_sale(
         sale_id=sale.id,
         created_by=sale.cashier_id,
     )

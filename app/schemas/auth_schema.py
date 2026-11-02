@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import uuid
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import AliasChoices, BaseModel, EmailStr, Field, model_validator
 
 from app.schemas.base_schema import STATS_SUMMARY_SCHEMA
 
@@ -79,23 +79,63 @@ class SYSTEM_LIST_OUT_SCHEMA(BaseModel):
 # ── System Credential Schemas ─────────────────────────────────────────────────
 
 class SYSTEM_CREDENTIAL_CREATE_SCHEMA(BaseModel):
-    traffic_type : str                 = Field(..., examples=["inbound", "outbound"])
-    auth_type    : str                 = Field(..., examples=["basic", "bearer", "api_key", "oauth2"])
-    status_code  : str                 = Field(default="active", max_length=10)
-    details      : Optional[Dict[str, Any]] = Field(default_factory=dict)
+    traffic_type   : str                      = Field(..., examples=["inbound", "outbound"])
+    auth_type_code : str                      = Field(..., examples=["basic", "bearer", "api_key", "oauth2"])
+    status_code    : str                      = Field(default="active", max_length=10)
+    system_code    : Optional[str]            = None
+    username       : Optional[str]            = None
+    password       : Optional[str]            = None
+    secret         : Optional[str]            = None
+    token          : Optional[str]            = None
+    api_key        : Optional[str]            = None
+    description    : Optional[str]            = None
+    details        : Optional[Dict[str, Any]] = Field(default_factory=dict)
+
+    model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _gather_extra_details(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            out = dict(data)
+            auth_t = out.get("auth_type_code") or out.get("auth_type")
+            if auth_t:
+                out["auth_type_code"] = auth_t
+                out["auth_type"] = auth_t
+            details = dict(out.get("details") or {})
+            for k in ("username", "password", "secret", "token", "api_key", "client_id", "client_secret"):
+                if k in out and out[k] is not None:
+                    details[k] = out[k]
+            out["details"] = details
+            return out
+        return data
+
+    @property
+    def auth_type(self) -> str:
+        return self.auth_type_code
 
 
 class SYSTEM_CREDENTIAL_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    system_code      : str
-    traffic_type     : str
-    auth_type        : str
-    status_code      : str
-    details          : Optional[Dict[str, Any]] = None
-    created_datetime : Optional[datetime]       = None
-    updated_datetime : Optional[datetime]       = None
+    id                         : uuid.UUID
+    system_code                : str
+    traffic_type               : str
+    auth_type                  : Optional[str]            = None
+    auth_type_code             : Optional[str]            = None
+    status_code                : str
+    details                    : Optional[Dict[str, Any]] = None
+    generated_secret           : Optional[str]            = None
+    header_value               : Optional[str]            = None
+    authorization_header_value : Optional[str]            = None
+    created_datetime           : Optional[datetime]       = None
+    updated_datetime           : Optional[datetime]       = None
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "extra": "allow"}
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.auth_type and self.auth_type_code:
+            self.auth_type = self.auth_type_code
+        elif not self.auth_type_code and self.auth_type:
+            self.auth_type_code = self.auth_type
 
 
 class SYSTEM_CREDENTIAL_LIST_OUT_SCHEMA(BaseModel):
@@ -109,24 +149,68 @@ class SYSTEM_CREDENTIAL_LIST_OUT_SCHEMA(BaseModel):
 # ── System Endpoint Schemas ───────────────────────────────────────────────────
 
 class SYSTEM_ENDPOINT_CREATE_SCHEMA(BaseModel):
-    code              : str           = Field(..., max_length=100, examples=["get_user_info"])
-    name              : str           = Field(..., max_length=255, examples=["Get User Info"])
-    endpoint_url      : str           = Field(..., max_length=500, examples=["/api/v1/users"])
-    http_method       : str           = Field(default="GET", max_length=10)
-    auth_type         : Optional[str] = Field(default=None, max_length=50)
-    description       : Optional[str] = Field(default=None)
-    is_encrypted_body : bool          = Field(default=False)
-    status_code       : str           = Field(default="active", max_length=10)
+    code              : str                 = Field(..., max_length=100, examples=["get_user_info"])
+    name              : str                 = Field(..., max_length=255, examples=["Get User Info"])
+    endpoint          : str                 = Field(..., max_length=500, examples=["/api/v1/users"])
+    system_code       : Optional[str]       = None
+    http_method       : str                 = Field(default="GET", max_length=10)
+    operation_type    : Optional[str]       = Field(default=None, max_length=50)
+    traffic_type      : Optional[str]       = Field(default="outbound", max_length=20)
+    request_timeout   : Optional[int]       = 30
+    auth_type         : Optional[str]       = Field(default=None, max_length=50)
+    headers_config    : Optional[Any]       = None
+    query_config      : Optional[Any]       = None
+    description       : Optional[str]       = Field(default=None)
+    is_encrypted_body : bool                = Field(default=False)
+    status_code       : str                 = Field(default="active", max_length=10)
+
+    model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_endpoint(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            out = dict(data)
+            if "endpoint_url" in out and "endpoint" not in out:
+                out["endpoint"] = out["endpoint_url"]
+            elif "endpoint" in out and "endpoint_url" not in out:
+                out["endpoint_url"] = out["endpoint"]
+            return out
+        return data
+
+    @property
+    def endpoint_url(self) -> str:
+        return self.endpoint
 
 
 class SYSTEM_ENDPOINT_UPDATE_SCHEMA(BaseModel):
     name              : Optional[str]  = Field(default=None, max_length=255)
+    endpoint          : Optional[str]  = Field(default=None, max_length=500)
     endpoint_url      : Optional[str]  = Field(default=None, max_length=500)
     http_method       : Optional[str]  = Field(default=None, max_length=10)
+    traffic_type      : Optional[str]  = Field(default=None, max_length=20)
+    operation_type    : Optional[str]  = Field(default=None, max_length=50)
+    request_timeout   : Optional[int]  = None
     auth_type         : Optional[str]  = Field(default=None, max_length=50)
+    headers_config    : Optional[Any]  = None
+    query_config      : Optional[Any]  = None
     description       : Optional[str]  = Field(default=None)
     is_encrypted_body : Optional[bool] = Field(default=None)
     status_code       : Optional[str]  = Field(default=None, max_length=10)
+
+    model_config = {"from_attributes": True, "extra": "allow"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_endpoint(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            out = dict(data)
+            if "endpoint_url" in out and "endpoint" not in out:
+                out["endpoint"] = out["endpoint_url"]
+            elif "endpoint" in out and "endpoint_url" not in out:
+                out["endpoint_url"] = out["endpoint"]
+            return out
+        return data
 
 
 class SYSTEM_ENDPOINT_RESPONSE_SCHEMA(BaseModel):
@@ -134,16 +218,28 @@ class SYSTEM_ENDPOINT_RESPONSE_SCHEMA(BaseModel):
     system_code       : str
     code              : str
     name              : str
-    endpoint_url      : str
+    endpoint          : Optional[str]      = None
+    endpoint_url      : Optional[str]      = None
     http_method       : str
     auth_type         : Optional[str]      = None
     description       : Optional[str]      = None
-    is_encrypted_body : bool
+    is_encrypted_body : bool               = False
+    traffic_type      : Optional[str]      = None
+    operation_type    : Optional[str]      = None
+    request_timeout   : Optional[int]      = 30
+    headers_config    : Optional[Any]      = None
+    query_config      : Optional[Any]      = None
     status_code       : str
     created_datetime  : Optional[datetime] = None
     updated_datetime  : Optional[datetime] = None
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "extra": "allow"}
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.endpoint and self.endpoint_url:
+            self.endpoint = self.endpoint_url
+        elif not self.endpoint_url and self.endpoint:
+            self.endpoint_url = self.endpoint
 
 
 class SYSTEM_ENDPOINT_LIST_OUT_SCHEMA(BaseModel):

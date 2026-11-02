@@ -11,7 +11,7 @@ from app.models import Branch, Warehouse
 from app.models import Brand, Category, Color, Product, ProductVariant, Size
 from app.models import Role, User
 from app.repositories.inventory_repository import InventoryStockRepository
-from app.services.inventory_service import InventoryService
+from app.services.inventory_service import INVENTORY_SERVICE
 
 
 async def create_test_infra(db: AsyncSession):
@@ -84,7 +84,7 @@ async def test_initial_stock_is_zero(db: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_initial_stock_creation(db: AsyncSession) -> None:
     _, warehouse, variant, user = await create_test_infra(db)
-    service = InventoryService(db)
+    service = INVENTORY_SERVICE(db)
 
     stock, movement = await service.adjust_stock(
         variant_id=variant.id,
@@ -106,7 +106,7 @@ async def test_initial_stock_creation(db: AsyncSession) -> None:
 async def test_stock_sale_return_consistency(db: AsyncSession) -> None:
     """Test: Initial 100 → Sale 5 → 95 → Return 2 → 97 → Adjustment -3 → 94."""
     _, warehouse, variant, user = await create_test_infra(db)
-    service = InventoryService(db)
+    service = INVENTORY_SERVICE(db)
 
     # Initial stock = 100
     stock, _ = await service.adjust_stock(variant.id, warehouse.id, 100, "INITIAL_STOCK", created_by=user.id)
@@ -132,7 +132,7 @@ async def test_stock_sale_return_consistency(db: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_cannot_go_below_zero(db: AsyncSession) -> None:
     _, warehouse, variant, user = await create_test_infra(db)
-    service = InventoryService(db)
+    service = INVENTORY_SERVICE(db)
 
     await service.adjust_stock(variant.id, warehouse.id, 5, "INITIAL_STOCK", created_by=user.id)
     from fastapi import HTTPException

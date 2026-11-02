@@ -12,7 +12,7 @@ from app.models import Branch
 from app.models import ExpenseCategory, Promotion
 from app.models import Role, User
 from app.schemas.expense_schema import EXPENSE_CREATE_SCHEMA
-from app.services.misc_service import ExpenseService, PromotionService
+from app.services.misc_service import EXPENSE_SERVICE, PROMOTION_SERVICE
 
 
 @pytest.mark.asyncio
@@ -36,7 +36,7 @@ async def test_expense_lifecycle(db: AsyncSession):
     db.add(user)
     await db.flush()
 
-    service = ExpenseService(db)
+    service = EXPENSE_SERVICE(db)
     exp_in = EXPENSE_CREATE_SCHEMA(
         category_id=category.id,
         branch_id=branch.id,
@@ -74,7 +74,7 @@ async def test_promotion_and_coupon_validation(db: AsyncSession):
     db.add(promo)
     await db.flush()
 
-    service = PromotionService(db)
+    service = PROMOTION_SERVICE(db)
 
     # Below minimum cart
     res_low = await service.validate_coupon("SAVE10", cart_total=Decimal("30.00"))

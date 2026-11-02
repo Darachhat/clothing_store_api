@@ -18,7 +18,7 @@ from app.schemas.promotion_schema import (
     PROMOTION_RESPONSE_SCHEMA,
     PROMOTION_UPDATE_SCHEMA,
 )
-from app.services.misc_service import PromotionService
+from app.services.misc_service import PROMOTION_SERVICE
 
 router = APIRouter(prefix="/promotions", tags=["Promotions & Discounts"])
 
@@ -121,5 +121,5 @@ async def validate_coupon(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_active_user),
 ) -> COUPON_VALIDATION_RESPONSE_SCHEMA:
-    service = PromotionService(db)
+    service = PROMOTION_SERVICE(db)
     return await service.validate_coupon(code=payload.code, cart_total=payload.cart_total)

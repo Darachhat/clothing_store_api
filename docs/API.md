@@ -571,8 +571,8 @@ Generated from the FastAPI OpenAPI spec (`app.openapi()`). Interactive docs: `/d
 ### Domain Audit Logs (`api/v1` & `api/admin/v1`)
 | Method | Path | Summary | Auth | Request | Response |
 | --- | --- | --- | --- | --- | --- |
-| GET | `/api/v1/audit-logs` | List append-only domain audit logs (`public.audit_logs`) | Bearer | `?action=&entity_type=&user_id=&skip=&limit=` | `AuditLogOut[]` |
-| GET | `/api/admin/v1/audit-logs` | List append-only domain audit logs (Admin Lane) | Bearer (`ADMIN`/`MANAGER`) | `?action=&entity_type=&user_id=&skip=&limit=` | `AuditLogOut[]` |
+| GET | `/api/v1/audit-logs` | List append-only domain audit logs (`public.audit_logs`) | Bearer | `?action=&entity_type=&user_id=&skip=&limit=` | `AUDIT_LOG_OUT_SCHEMA[]` |
+| GET | `/api/admin/v1/audit-logs` | List append-only domain audit logs (Admin Lane) | Bearer (`ADMIN`/`MANAGER`) | `?action=&entity_type=&user_id=&skip=&limit=` | `AUDIT_LOG_OUT_SCHEMA[]` |
 
 ### Branches & Warehouses CRUD (`api/v1`, `api/admin/v1`, `api/cashier/v1`)
 | Method | Path | Summary | Auth | Request | Response |

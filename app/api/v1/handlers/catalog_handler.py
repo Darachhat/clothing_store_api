@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import require_permission
 from app.models import User
-from app.services.product_service import ProductService
+from app.services.product_service import PRODUCT_SERVICE
 from app.repositories.product_repository import (
     BrandRepository,
     CategoryRepository,
@@ -66,7 +66,7 @@ async def create_category(
     data = body.model_dump(exclude_unset=True)
     data["slug"] = slug
     obj = await repo.create(**data)
-    await ProductService.increment_catalog_version(db)
+    await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     return obj
 
@@ -100,7 +100,7 @@ async def update_category(
     if "name" in data and "slug" not in data:
         data["slug"] = slugify(data["name"])
     obj = await repo.update(obj, **data)
-    await ProductService.increment_catalog_version(db)
+    await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     return obj
 
@@ -116,7 +116,7 @@ async def delete_category(
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
     await repo.delete(obj)
-    await ProductService.increment_catalog_version(db)
+    await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -141,7 +141,7 @@ async def create_color(
 ) -> COLOR_RESPONSE_SCHEMA:
     repo = ColorRepository(db)
     obj = await repo.create(**body.model_dump(exclude_unset=True))
-    await ProductService.increment_catalog_version(db)
+    await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     return obj
 
@@ -172,7 +172,7 @@ async def update_color(
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Color not found")
     obj = await repo.update(obj, **body.model_dump(exclude_unset=True))
-    await ProductService.increment_catalog_version(db)
+    await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     return obj
 
@@ -188,7 +188,7 @@ async def delete_color(
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Color not found")
     await repo.delete(obj)
-    await ProductService.increment_catalog_version(db)
+    await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -213,7 +213,7 @@ async def create_size(
 ) -> SIZE_RESPONSE_SCHEMA:
     repo = SizeRepository(db)
     obj = await repo.create(**body.model_dump(exclude_unset=True))
-    await ProductService.increment_catalog_version(db)
+    await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     return obj
 
@@ -244,7 +244,7 @@ async def update_size(
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Size not found")
     obj = await repo.update(obj, **body.model_dump(exclude_unset=True))
-    await ProductService.increment_catalog_version(db)
+    await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     return obj
 
@@ -260,7 +260,7 @@ async def delete_size(
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Size not found")
     await repo.delete(obj)
-    await ProductService.increment_catalog_version(db)
+    await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -288,7 +288,7 @@ async def create_brand(
     data = body.model_dump(exclude_unset=True)
     data["slug"] = slug
     obj = await repo.create(**data)
-    await ProductService.increment_catalog_version(db)
+    await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     return obj
 
@@ -322,7 +322,7 @@ async def update_brand(
     if "name" in data and "slug" not in data:
         data["slug"] = slugify(data["name"])
     obj = await repo.update(obj, **data)
-    await ProductService.increment_catalog_version(db)
+    await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     return obj
 
@@ -338,7 +338,7 @@ async def delete_brand(
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Brand not found")
     await repo.delete(obj)
-    await ProductService.increment_catalog_version(db)
+    await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

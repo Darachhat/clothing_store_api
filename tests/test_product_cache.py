@@ -507,8 +507,8 @@ async def test_postgres_as_source_of_truth_recovers_after_redis_flush(
     headers = data["headers"]
 
     # 1. Bump catalog version in PostgreSQL
-    from app.services.product_service import ProductService
-    v_db = await ProductService.increment_catalog_version(db)
+    from app.services.product_service import PRODUCT_SERVICE
+    v_db = await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
     assert v_db > 1
 

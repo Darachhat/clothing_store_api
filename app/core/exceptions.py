@@ -1,11 +1,14 @@
 from typing import List, Optional
+from fastapi import HTTPException
 
 from app.core.enum.response_enum import RESPONSE_CODE_ENUM, RESPONSE_MESSAGE_REGISTRY
 
 
-class APP_EXCEPTION(Exception):
+class APP_EXCEPTION(HTTPException):
     """
     Base domain exception for application-level error handling.
+    Inherits from HTTPException so FastAPI handlers and standard error listeners
+    seamlessly capture status_code and detail.
     """
     def __init__(
         self
@@ -17,8 +20,8 @@ class APP_EXCEPTION(Exception):
         self.code        = code
         self.message     = message or RESPONSE_MESSAGE_REGISTRY.get_message(code)
         self.errors      = errors or []
-        self.status_code = status_code
-        super().__init__(self.message)
+        super().__init__(status_code=status_code, detail=self.message)
+
 
 
 class NOT_FOUND_EXCEPTION(APP_EXCEPTION):
@@ -117,4 +120,33 @@ class SERVICE_UNAVAILABLE_EXCEPTION(APP_EXCEPTION):
             , errors      = errors
             , status_code = 503
         )
+
+
+class BAD_GATEWAY_EXCEPTION(APP_EXCEPTION):
+    def __init__(
+        self
+        , message : str                 = "Bad gateway"
+        , errors  : Optional[List[str]] = None
+    ):
+        super().__init__(
+            code          = RESPONSE_CODE_ENUM.SERVICE_UNAVAILABLE
+            , message     = message
+            , errors      = errors
+            , status_code = 502
+        )
+
+
+class INTERNAL_SERVER_EXCEPTION(APP_EXCEPTION):
+    def __init__(
+        self
+        , message : str                 = "Internal server error"
+        , errors  : Optional[List[str]] = None
+    ):
+        super().__init__(
+            code          = RESPONSE_CODE_ENUM.INTERNAL_SERVER_ERROR
+            , message     = message
+            , errors      = errors
+            , status_code = 500
+        )
+
 

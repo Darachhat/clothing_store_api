@@ -13,8 +13,8 @@ from app.models import Branch, Warehouse
 from app.models import Expense, ExpenseCategory
 from app.models import Brand, Category, Color, Product, ProductVariant, Size
 from app.models import Permission, Role, User
-from app.services.inventory_service import InventoryService
-from app.services.sale_service import SaleService
+from app.services.inventory_service import INVENTORY_SERVICE
+from app.services.sale_service import SALE_SERVICE
 
 
 async def create_report_test_infra(db: AsyncSession):
@@ -85,7 +85,7 @@ async def create_report_test_infra(db: AsyncSession):
     await db.commit()
 
     # Initial stock
-    inv_svc = InventoryService(db)
+    inv_svc = INVENTORY_SERVICE(db)
     await inv_svc.adjust_stock(
         variant_id=variant.id,
         warehouse_id=warehouse.id,
@@ -115,7 +115,7 @@ async def make_completed_sale(
     from sqlalchemy.orm import selectinload
     from app.models import Sale as SaleModel
 
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
     sale = await service.create_sale(
         branch_id=infra["branch"].id,
         warehouse_id=infra["warehouse"].id,

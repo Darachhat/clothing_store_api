@@ -64,7 +64,7 @@ class Base(DeclarativeBase):
     pass
 
 
-class TEMPLATE_BASE_MODEL(Base):
+class BASE_MODEL(Base):
     """Abstract base for enterprise template models with standardized audit columns."""
 
     __abstract__ = True
@@ -85,6 +85,11 @@ class TEMPLATE_BASE_MODEL(Base):
     def updated_at(cls):
         return synonym("updated_datetime")
 
+    @declared_attr
+    def status(cls):
+        return synonym("status_code")
+
+
 
 class TIMESTAMP_MIXIN:
     """Legacy timestamp mixin (maps to created_datetime and updated_datetime)."""
@@ -97,7 +102,7 @@ class TIMESTAMP_MIXIN:
         return synonym("updated_datetime")
 
 
-class UUID_BASE_MODEL(TEMPLATE_BASE_MODEL):
+class UUID_BASE_MODEL(BASE_MODEL):
     """Abstract base with UUID PK, status_code, and standardized audit columns."""
 
     __abstract__ = True
@@ -109,17 +114,6 @@ class UUID_BASE_MODEL(TEMPLATE_BASE_MODEL):
     )
     status_code : Mapped[str] = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    @declared_attr
-    def status(cls):
-        return synonym("status_code")
-
-    @declared_attr
-    def created_at(cls):
-        return synonym("created_datetime")
-
-    @declared_attr
-    def updated_at(cls):
-        return synonym("updated_datetime")
 
 
 # Backward-compatible aliases

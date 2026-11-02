@@ -260,3 +260,8 @@ def rotate_logs(
 logger       = setup_logging()
 trace_logger = TRACE_LOGGER(Path("logs"))
 
+
+def get_logger(name: str = ""):
+    return logger
+
+

@@ -21,7 +21,7 @@ from app.schemas.sale_schema import (
     SALE_CREATE_SCHEMA,
     SALE_RESPONSE_SCHEMA,
 )
-from app.services.sale_service import SaleService
+from app.services.sale_service import SALE_SERVICE
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
 
@@ -65,7 +65,7 @@ async def create_sale(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("sale.create")),
 ) -> Sale:
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
     items_data = [
         {
             "variant_id": item.variant_id,
@@ -158,7 +158,7 @@ async def create_sale_return(
     if not sale:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Original sale not found")
 
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
     ret = await service.process_return(
         original_sale=sale,
         return_items_data=[i.model_dump() for i in body.items],
@@ -167,9 +167,9 @@ async def create_sale_return(
         reason=body.reason,
         processed_by=current_user.id,
     )
-    from app.services.product_service import ProductService
+    from app.services.product_service import PRODUCT_SERVICE
 
-    await ProductService.increment_inventory_version(db)
+    await PRODUCT_SERVICE.increment_inventory_version(db)
     await db.commit()
     await db.refresh(ret)
     return ret
@@ -191,13 +191,13 @@ async def complete_sale(
     if not sale:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found")
 
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
     sale = await service.complete_sale(
         sale,
         [p.model_dump() for p in body.payments],
     )
-    from app.services.product_service import ProductService
-    await ProductService.increment_inventory_version(db)
+    from app.services.product_service import PRODUCT_SERVICE
+    await PRODUCT_SERVICE.increment_inventory_version(db)
     await db.commit()
     res = await db.execute(
         select(Sale)
@@ -223,10 +223,10 @@ async def cancel_sale(
     if not sale:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale not found")
 
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
     sale = await service.cancel_sale(sale, current_user.id)
-    from app.services.product_service import ProductService
-    await ProductService.increment_inventory_version(db)
+    from app.services.product_service import PRODUCT_SERVICE
+    await PRODUCT_SERVICE.increment_inventory_version(db)
     await db.commit()
     res = await db.execute(
         select(Sale)
@@ -268,7 +268,7 @@ async def create_return(
     if not sale:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Original sale not found")
 
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
     ret = await service.process_return(
         original_sale=sale,
         return_items_data=[i.model_dump() for i in body.items],
@@ -277,9 +277,9 @@ async def create_return(
         reason=body.reason,
         processed_by=current_user.id,
     )
-    from app.services.product_service import ProductService
+    from app.services.product_service import PRODUCT_SERVICE
 
-    await ProductService.increment_inventory_version(db)
+    await PRODUCT_SERVICE.increment_inventory_version(db)
     await db.commit()
     await db.refresh(ret)
     return ret

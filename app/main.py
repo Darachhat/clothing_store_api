@@ -31,6 +31,7 @@ from app.middleware.access import BASE_MIDDLEWARE
 from app.middleware.auth import SYSTEM_AUTH_MIDDLEWARE
 from app.middleware.trace import TRACE_MIDDLEWARE
 from app.schemas.base_schema import RESPONSE_ENVELOPE
+from app.services.minio_service import MINIO_SERVICE
 
 
 @asynccontextmanager
@@ -52,8 +53,7 @@ async def lifespan(app: FastAPI):
 
         if settings.ENV not in ("testing", "test"):
             try:
-                from app.services.minio_service import minio_service
-                minio_service.ensure_bucket_exists()
+                MINIO_SERVICE.ensure_bucket_exists()
                 logger.info("MinIO bucket initialized successfully")
             except Exception as e:
                 logger.warning(f"MinIO bucket auto-initialization deferred: {e}")

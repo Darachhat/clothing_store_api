@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models import PaymentTransaction
-from app.services.payment_service import PaymentService
+from app.services.payment_service import PAYMENT_SERVICE
 
 router = APIRouter(prefix="/api/payments/aba", tags=["ABA PayWay Callback"])
 
@@ -64,7 +64,7 @@ async def aba_pushback(
     tx = result.scalar_one_or_none()
 
     if tx:
-        svc = PaymentService(db)
+        svc = PAYMENT_SERVICE(db)
         await svc.refresh_status(tx.id)
         await db.commit()
     else:

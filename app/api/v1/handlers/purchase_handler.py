@@ -20,7 +20,7 @@ from app.schemas.purchase_schema import (
     PURCHASE_ORDER_RESPONSE_SCHEMA,
     PURCHASE_ORDER_UPDATE_SCHEMA,
 )
-from app.services.purchase_service import PurchaseService
+from app.services.purchase_service import PURCHASE_SERVICE
 
 router = APIRouter(prefix="/purchases", tags=["Purchasing & Goods Receipts"])
 
@@ -59,7 +59,7 @@ async def create_purchase_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("purchase.create")),
 ) -> PurchaseOrder:
-    service = PurchaseService(db)
+    service = PURCHASE_SERVICE(db)
     po = await service.create_purchase_order(created_by=current_user.id, data=payload)
     await db.commit()
     return po
@@ -85,7 +85,7 @@ async def update_purchase_order(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("purchase.create")),
 ) -> PurchaseOrder:
-    service = PurchaseService(db)
+    service = PURCHASE_SERVICE(db)
     po = await service.update_purchase_order(po_id=order_id, data=payload)
     await db.commit()
     return po
@@ -97,7 +97,7 @@ async def approve_purchase_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("purchase.create")),
 ) -> PurchaseOrder:
-    service = PurchaseService(db)
+    service = PURCHASE_SERVICE(db)
     po = await service.approve_purchase_order(po_id=order_id, approved_by=current_user.id)
     await db.commit()
     return po
@@ -109,7 +109,7 @@ async def cancel_purchase_order(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("purchase.create")),
 ) -> PurchaseOrder:
-    service = PurchaseService(db)
+    service = PURCHASE_SERVICE(db)
     po = await service.cancel_purchase_order(po_id=order_id)
     await db.commit()
     return po
@@ -136,7 +136,7 @@ async def receive_purchase_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("purchase.receive")),
 ) -> GoodsReceipt:
-    service = PurchaseService(db)
+    service = PURCHASE_SERVICE(db)
     data = GOODS_RECEIPT_CREATE_SCHEMA(
         purchase_order_id=order_id,
         warehouse_id=payload.warehouse_id,
@@ -154,7 +154,7 @@ async def create_goods_receipt(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("purchase.receive")),
 ) -> GoodsReceipt:
-    service = PurchaseService(db)
+    service = PURCHASE_SERVICE(db)
     gr = await service.create_goods_receipt(received_by=current_user.id, data=payload)
     await db.commit()
     return gr

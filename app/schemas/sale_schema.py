@@ -123,6 +123,11 @@ class SALE_COMPLETE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
+SALE_COMPLETE_REQUEST_SCHEMA = SALE_COMPLETE_SCHEMA
+
+
+
+
 class SALE_RESPONSE_SCHEMA(BaseModel):
     id               : uuid.UUID
     invoice_number   : str
@@ -195,6 +200,9 @@ class RETURN_CREATE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
+RETURN_CREATE_REQUEST_SCHEMA = RETURN_CREATE_SCHEMA
+
+
 class RETURN_CREATE_FOR_SALE_SCHEMA(BaseModel):
     original_sale_id : Optional[uuid.UUID]                  = None
     return_type      : str                                  = "PARTIAL"
@@ -248,10 +256,12 @@ __all__ = [
     "SALE_PAYMENT_RESPONSE_SCHEMA",
     "SALE_CREATE_SCHEMA",
     "SALE_COMPLETE_SCHEMA",
+    "SALE_COMPLETE_REQUEST_SCHEMA",
     "SALE_RESPONSE_SCHEMA",
     "RETURN_ITEM_CREATE_SCHEMA",
     "RETURN_PAYMENT_CREATE_SCHEMA",
     "RETURN_CREATE_SCHEMA",
+    "RETURN_CREATE_REQUEST_SCHEMA",
     "RETURN_CREATE_FOR_SALE_SCHEMA",
     "RETURN_RESPONSE_SCHEMA",
 ]

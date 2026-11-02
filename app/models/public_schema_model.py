@@ -1,7 +1,3 @@
-"""
-Public Schema Models: system infrastructure, Alembic tracking, or global public entities.
-Schema: public
-"""
 from __future__ import annotations
 
 from sqlalchemy import Column, String

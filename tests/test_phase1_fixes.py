@@ -18,7 +18,7 @@ from app.schemas.expense_schema import EXPENSE_CREATE_SCHEMA
 from app.schemas.inventory_schema import STOCK_ADJUSTMENT_CREATE_SCHEMA
 from app.schemas.promotion_schema import PROMOTION_CREATE_SCHEMA
 from app.schemas.telegram_schema import TELEGRAM_BOT_RESPONSE_SCHEMA
-from app.services.inventory_service import InventoryService
+from app.services.inventory_service import INVENTORY_SERVICE
 
 
 async def setup_admin_env(db: AsyncSession):
@@ -108,7 +108,7 @@ async def setup_admin_env(db: AsyncSession):
     db.add(admin_user)
     await db.flush()
 
-    inv_service = InventoryService(db)
+    inv_service = INVENTORY_SERVICE(db)
     await inv_service.adjust_stock(
         variant_id=variant.id,
         warehouse_id=warehouse.id,

@@ -5,12 +5,12 @@ from sqlalchemy import Boolean, Integer, JSON, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.database import TEMPLATE_BASE_MODEL
+from app.core.database import BASE_MODEL
 
 JSON_TYPE = JSONB().with_variant(JSON(), "sqlite")
 
 
-class SYSTEM_MODEL(TEMPLATE_BASE_MODEL):
+class SYSTEM_MODEL(BASE_MODEL):
     __tablename__               = "system"
     __table_args__              = {"schema": "auth"}
 
@@ -24,7 +24,7 @@ class SYSTEM_MODEL(TEMPLATE_BASE_MODEL):
     status_code                 : Mapped[str]           = mapped_column(String(10), default="active", nullable=False)
 
 
-class SYSTEM_CLIENT_MODEL(TEMPLATE_BASE_MODEL):
+class SYSTEM_CLIENT_MODEL(BASE_MODEL):
     __tablename__               = "system_client"
     __table_args__              = {"schema": "auth"}
 
@@ -36,7 +36,7 @@ class SYSTEM_CLIENT_MODEL(TEMPLATE_BASE_MODEL):
     status_code                 : Mapped[str]           = mapped_column(String(10), default="active", nullable=False)
 
 
-class SYSTEM_CREDENTIAL_MODEL(TEMPLATE_BASE_MODEL):
+class SYSTEM_CREDENTIAL_MODEL(BASE_MODEL):
     __tablename__               = "system_credential"
     __table_args__              = {"schema": "auth"}
 
@@ -48,7 +48,7 @@ class SYSTEM_CREDENTIAL_MODEL(TEMPLATE_BASE_MODEL):
     status_code                 : Mapped[str]           = mapped_column(String(10), default="active", nullable=False)
 
 
-class CREDENTIAL_BASIC_MODEL(TEMPLATE_BASE_MODEL):
+class CREDENTIAL_BASIC_MODEL(BASE_MODEL):
     __tablename__               = "credential_basic"
     __table_args__              = {"schema": "auth"}
 
@@ -61,7 +61,7 @@ class CREDENTIAL_BASIC_MODEL(TEMPLATE_BASE_MODEL):
     status_code                 : Mapped[str]           = mapped_column(String(10), default="active", nullable=False)
 
 
-class CREDENTIAL_BEARER_MODEL(TEMPLATE_BASE_MODEL):
+class CREDENTIAL_BEARER_MODEL(BASE_MODEL):
     __tablename__               = "credential_bearer"
     __table_args__              = {"schema": "auth"}
 
@@ -75,7 +75,7 @@ class CREDENTIAL_BEARER_MODEL(TEMPLATE_BASE_MODEL):
     status_code                 : Mapped[str]           = mapped_column(String(10), default="active", nullable=False)
 
 
-class CREDENTIAL_API_KEY_MODEL(TEMPLATE_BASE_MODEL):
+class CREDENTIAL_API_KEY_MODEL(BASE_MODEL):
     __tablename__               = "credential_api_key"
     __table_args__              = {"schema": "auth"}
 
@@ -89,7 +89,7 @@ class CREDENTIAL_API_KEY_MODEL(TEMPLATE_BASE_MODEL):
     status_code                 : Mapped[str]           = mapped_column(String(10), default="active", nullable=False)
 
 
-class CREDENTIAL_OAUTH2_MODEL(TEMPLATE_BASE_MODEL):
+class CREDENTIAL_OAUTH2_MODEL(BASE_MODEL):
     __tablename__               = "credential_oauth2"
     __table_args__              = {"schema": "auth"}
 
@@ -106,7 +106,7 @@ class CREDENTIAL_OAUTH2_MODEL(TEMPLATE_BASE_MODEL):
     status_code                 : Mapped[str]           = mapped_column(String(10), default="active", nullable=False)
 
 
-class TELEGRAM_BOT_MODEL(TEMPLATE_BASE_MODEL):
+class TELEGRAM_BOT_MODEL(BASE_MODEL):
     __tablename__               = "telegram_bot"
     __table_args__              = {"schema": "auth"}
 
@@ -120,7 +120,7 @@ class TELEGRAM_BOT_MODEL(TEMPLATE_BASE_MODEL):
     status_code                 : Mapped[str]           = mapped_column(String(10), default="active", nullable=False)
 
 
-class TELEGRAM_CHAT_MODEL(TEMPLATE_BASE_MODEL):
+class TELEGRAM_CHAT_MODEL(BASE_MODEL):
     __tablename__               = "telegram_chat"
     __table_args__              = {"schema": "auth"}
 
@@ -136,7 +136,7 @@ class TELEGRAM_CHAT_MODEL(TEMPLATE_BASE_MODEL):
     status_code                 : Mapped[str]           = mapped_column(String(10), default="active", nullable=False)
 
 
-class SYSTEM_ENDPOINT_MODEL(TEMPLATE_BASE_MODEL):
+class SYSTEM_ENDPOINT_MODEL(BASE_MODEL):
     __tablename__               = "system_endpoint"
     __table_args__              = {"schema": "auth"}
 

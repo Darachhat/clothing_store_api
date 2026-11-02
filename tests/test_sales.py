@@ -12,8 +12,8 @@ from app.models import Branch, Warehouse
 from app.models import Brand, Category, Color, Product, ProductVariant, Size
 from app.models import Permission, Role, User
 from app.repositories.inventory_repository import InventoryStockRepository
-from app.services.inventory_service import InventoryService
-from app.services.sale_service import SaleService
+from app.services.inventory_service import INVENTORY_SERVICE
+from app.services.sale_service import SALE_SERVICE
 
 
 async def create_sale_test_infra(db: AsyncSession):
@@ -85,7 +85,7 @@ async def create_sale_test_infra(db: AsyncSession):
     await db.commit()
 
     # Initialize stock
-    inv_service = InventoryService(db)
+    inv_service = INVENTORY_SERVICE(db)
     await inv_service.adjust_stock(
         variant_id=variant.id,
         warehouse_id=warehouse.id,
@@ -115,7 +115,7 @@ async def test_create_and_complete_sale(db: AsyncSession) -> None:
     stock = await stock_repo.get_stock(infra["variant"].id, infra["warehouse"].id)
     assert stock is not None and stock.quantity == 50
 
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
 
     # Create a draft sale
     sale = await service.create_sale(
@@ -172,7 +172,7 @@ async def test_cancel_completed_sale_restores_stock(db: AsyncSession) -> None:
     """Cancelling a completed sale must restore stock."""
     infra = await create_sale_test_infra(db)
     stock_repo = InventoryStockRepository(db)
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
 
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
@@ -218,7 +218,7 @@ async def test_cancel_completed_sale_restores_stock(db: AsyncSession) -> None:
 async def test_partial_payment_sets_partial_status(db: AsyncSession) -> None:
     """Paying less than total should mark payment as PARTIAL."""
     infra = await create_sale_test_infra(db)
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
 
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
@@ -259,7 +259,7 @@ async def test_return_restores_stock(db: AsyncSession) -> None:
     """Returning 1 item from a 2-item sale should restore stock by 1."""
     infra = await create_sale_test_infra(db)
     stock_repo = InventoryStockRepository(db)
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
 
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
@@ -321,7 +321,7 @@ async def test_cannot_double_complete_sale(db: AsyncSession) -> None:
     from fastapi import HTTPException
 
     infra = await create_sale_test_infra(db)
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
 
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
@@ -409,7 +409,7 @@ async def test_sale_api_via_http(client: AsyncClient, db: AsyncSession) -> None:
 async def test_create_sale_ignores_client_unit_price(db: AsyncSession) -> None:
     """A client-supplied unit_price must not override the catalog selling price."""
     infra = await create_sale_test_infra(db)
-    sale = await SaleService(db).create_sale(
+    sale = await SALE_SERVICE(db).create_sale(
         branch_id=infra["branch"].id,
         warehouse_id=infra["warehouse"].id,
         cashier_id=infra["user"].id,
@@ -430,7 +430,7 @@ async def test_create_sale_ignores_client_unit_price(db: AsyncSession) -> None:
 async def test_line_discount_is_not_double_counted(db: AsyncSession) -> None:
     """Line discount reduces the total once; order discount is separate."""
     infra = await create_sale_test_infra(db)
-    sale = await SaleService(db).create_sale(
+    sale = await SALE_SERVICE(db).create_sale(
         branch_id=infra["branch"].id,
         warehouse_id=infra["warehouse"].id,
         cashier_id=infra["user"].id,
@@ -466,7 +466,7 @@ async def test_create_sale_rejects_invalid_amounts(
 
     infra = await create_sale_test_infra(db)
     with pytest.raises(HTTPException) as exc:
-        await SaleService(db).create_sale(
+        await SALE_SERVICE(db).create_sale(
             branch_id=infra["branch"].id,
             warehouse_id=infra["warehouse"].id,
             cashier_id=infra["user"].id,
@@ -491,7 +491,7 @@ async def _completed_sale(db: AsyncSession, infra, qty: int):
     from sqlalchemy.orm import selectinload
     from app.models import Sale as SaleModel
 
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
     sale = await service.create_sale(
         branch_id=infra["branch"].id,
         warehouse_id=infra["warehouse"].id,
@@ -575,7 +575,7 @@ async def test_return_cannot_exceed_quantity_sold(db: AsyncSession) -> None:
 async def test_loyalty_points_earned_and_clawed_back(db: AsyncSession) -> None:
     from app.models import Customer
     from app.models import Sale as SaleModel
-    from app.services.customer_service import CustomerService
+    from app.services.customer_service import CUSTOMER_SERVICE
     from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
@@ -589,7 +589,7 @@ async def test_loyalty_points_earned_and_clawed_back(db: AsyncSession) -> None:
     db.add(cust)
     await db.flush()
 
-    service = SaleService(db)
+    service = SALE_SERVICE(db)
     sale = await service.create_sale(
         branch_id=infra["branch"].id,
         warehouse_id=infra["warehouse"].id,
@@ -610,7 +610,7 @@ async def test_loyalty_points_earned_and_clawed_back(db: AsyncSession) -> None:
     )
     await db.commit()
 
-    cust_svc = CustomerService(db)
+    cust_svc = CUSTOMER_SERVICE(db)
     cust_loaded = await cust_svc.get_customer(cust.id)
     assert cust_loaded.loyalty_account is not None
     assert cust_loaded.loyalty_account.points_balance == 40

@@ -9,13 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import require_permission
 from app.models import User
-from app.services.audit_service import AuditLogOut, AuditService
+from app.services.audit_service import AUDIT_LOG_OUT_SCHEMA, AUDIT_SERVICE
 
 router = APIRouter(prefix="/audit-logs", tags=["Audit Logs"])
 
 
-@router.get("", response_model=list[AuditLogOut])
-@router.get("/", response_model=list[AuditLogOut], include_in_schema=False)
+@router.get("", response_model=list[AUDIT_LOG_OUT_SCHEMA])
+@router.get("/", response_model=list[AUDIT_LOG_OUT_SCHEMA], include_in_schema=False)
 async def list_audit_logs(
     action: str | None = Query(None),
     entity_type: str | None = Query(None),
@@ -24,8 +24,8 @@ async def list_audit_logs(
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("settings.manage")),
-) -> list[AuditLogOut]:
-    logs = await AuditService.list_logs(
+) -> list[AUDIT_LOG_OUT_SCHEMA]:
+    logs = await AUDIT_SERVICE.list_logs(
         db=db,
         action=action,
         entity_type=entity_type,
@@ -33,5 +33,5 @@ async def list_audit_logs(
         skip=skip,
         limit=limit,
     )
-    return [AuditLogOut.model_validate(item) for item in logs]
+    return [AUDIT_LOG_OUT_SCHEMA.model_validate(item) for item in logs]
 

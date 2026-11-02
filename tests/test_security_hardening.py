@@ -133,10 +133,10 @@ async def test_khqr_never_returns_fabricated_qr_on_gateway_failure(
 async def test_pos_sales_are_not_reachable_through_store_lane(
     client: AsyncClient, db: AsyncSession
 ) -> None:
-    from app.services.sale_service import SaleService
+    from app.services.sale_service import SALE_SERVICE
 
     infra = await create_sale_test_infra(db)
-    pos_sale = await SaleService(db).create_sale(
+    pos_sale = await SALE_SERVICE(db).create_sale(
         branch_id=infra["branch"].id,
         warehouse_id=infra["warehouse"].id,
         cashier_id=infra["user"].id,

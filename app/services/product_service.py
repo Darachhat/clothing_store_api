@@ -1,16 +1,16 @@
 """Product catalog business service integrating PostgreSQL repository and version-aware Redis cache."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from fastapi import HTTPException, status
 from slugify import slugify
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache.product_cache import ProductCache
-from app.core.logger import logger
+from app.core.exceptions import NOT_FOUND_EXCEPTION
+from app.core.logging import get_logger
 from app.models import CatalogVersion, Color, Product, ProductVariant, Size
 from app.repositories.product_repository import ProductRepository, ProductVariantRepository
 from app.schemas.product_schema import (
@@ -21,6 +21,8 @@ from app.schemas.product_schema import (
 )
 from app.utils.generators import generate_qr_reference, generate_sku
 
+logger = get_logger(__name__)
+
 
 class PRODUCT_SERVICE:
     """
@@ -29,7 +31,7 @@ class PRODUCT_SERVICE:
     """
 
     @classmethod
-    async def get_catalog_versions(cls, db: AsyncSession) -> tuple[int, int]:
+    async def get_catalog_versions(cls, db: AsyncSession) -> Tuple[int, int]:
         """
         Get current (product_version, inventory_version).
         1. Checks Redis cache first for sub-millisecond retrieval.
@@ -127,8 +129,8 @@ class PRODUCT_SERVICE:
     async def get_paginated_products(
         cls
         , db         : AsyncSession
-        , raw_params : dict[str, Any]
-    ) -> tuple[dict[str, Any], bool, int]:
+        , raw_params : Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], bool, int]:
         """
         Fetch paginated products using version-aware Redis cache.
         Returns: (data_dict, is_cache_hit, current_version)
@@ -181,7 +183,7 @@ class PRODUCT_SERVICE:
         repo    = ProductRepository(db)
         product = await repo.get_with_variants(product_id)
         if not product:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+            raise NOT_FOUND_EXCEPTION("Product not found")
         return product
 
     @classmethod
@@ -189,7 +191,7 @@ class PRODUCT_SERVICE:
         repo    = ProductRepository(db)
         product = await repo.get_by_id(product_id)
         if not product:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+            raise NOT_FOUND_EXCEPTION("Product not found")
         product = await repo.update(product, **body.model_dump(exclude_none=True))
         await cls.increment_catalog_version(db)
         await db.commit()
@@ -200,7 +202,7 @@ class PRODUCT_SERVICE:
         repo    = ProductRepository(db)
         product = await repo.get_by_id(product_id)
         if not product:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+            raise NOT_FOUND_EXCEPTION("Product not found")
         await repo.delete(product)
         await cls.increment_catalog_version(db)
         await db.commit()
@@ -209,13 +211,13 @@ class PRODUCT_SERVICE:
     async def list_variants(
         cls
         , db         : AsyncSession
-        , q          : str | None = None
-        , product_id : UUID | None = None
-        , color_id   : UUID | None = None
-        , size_id    : UUID | None = None
+        , q          : Optional[str] = None
+        , product_id : Optional[UUID] = None
+        , color_id   : Optional[UUID] = None
+        , size_id    : Optional[UUID] = None
         , skip       : int = 0
         , limit      : int = 50
-    ) -> list[ProductVariant]:
+    ) -> List[ProductVariant]:
         repo = ProductVariantRepository(db)
         return await repo.search(
             q            = q
@@ -233,7 +235,7 @@ class PRODUCT_SERVICE:
 
         product = await product_repo.get_by_id(body.product_id)
         if not product:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+            raise NOT_FOUND_EXCEPTION("Product not found")
 
         color_name = None
         size_name  = None
@@ -250,7 +252,7 @@ class PRODUCT_SERVICE:
             select(func.count()).select_from(ProductVariant)
             .where(ProductVariant.product_id == body.product_id)
         )
-        count = count_res.scalar_one()
+        count   = count_res.scalar_one()
         seq_num = count + 1
         while True:
             sku = generate_sku(product.code, color_name, size_name, seq_num)
@@ -273,7 +275,7 @@ class PRODUCT_SERVICE:
         repo    = ProductVariantRepository(db)
         variant = await repo.get_by_id(variant_id)
         if not variant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
+            raise NOT_FOUND_EXCEPTION("Variant not found")
         await repo.delete(variant)
         await cls.increment_catalog_version(db)
         await db.commit()
@@ -283,7 +285,7 @@ class PRODUCT_SERVICE:
         repo    = ProductVariantRepository(db)
         variant = await repo.get_by_qr_reference(reference)
         if not variant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
+            raise NOT_FOUND_EXCEPTION("Variant not found")
         return variant
 
     @classmethod
@@ -291,7 +293,7 @@ class PRODUCT_SERVICE:
         repo    = ProductVariantRepository(db)
         variant = await repo.get_by_barcode(barcode)
         if not variant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
+            raise NOT_FOUND_EXCEPTION("Variant not found")
         return variant
 
     @classmethod
@@ -299,7 +301,7 @@ class PRODUCT_SERVICE:
         repo    = ProductVariantRepository(db)
         variant = await repo.get_by_sku(sku)
         if not variant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
+            raise NOT_FOUND_EXCEPTION("Variant not found")
         return variant
 
     @classmethod
@@ -307,7 +309,7 @@ class PRODUCT_SERVICE:
         repo    = ProductVariantRepository(db)
         variant = await repo.get_by_id(variant_id)
         if not variant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
+            raise NOT_FOUND_EXCEPTION("Variant not found")
         return variant
 
     @classmethod
@@ -315,7 +317,7 @@ class PRODUCT_SERVICE:
         repo    = ProductVariantRepository(db)
         variant = await repo.get_by_id(variant_id)
         if not variant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
+            raise NOT_FOUND_EXCEPTION("Variant not found")
         variant = await repo.update(variant, **body.model_dump(exclude_none=True))
         await cls.increment_catalog_version(db)
         await db.commit()
@@ -327,7 +329,7 @@ class PRODUCT_SERVICE:
         repo    = ProductVariantRepository(db)
         variant = await repo.get_by_id(variant_id)
         if not variant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
+            raise NOT_FOUND_EXCEPTION("Variant not found")
         new_qr = await generate_qr_reference(db)
         variant = await repo.update(variant, qr_reference=new_qr)
         await cls.increment_catalog_version(db)
@@ -336,5 +338,4 @@ class PRODUCT_SERVICE:
         return updated or variant
 
 
-# Backward-compatible alias
-ProductService = PRODUCT_SERVICE
+PRODUCT_SERVICE = PRODUCT_SERVICE

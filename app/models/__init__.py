@@ -8,7 +8,7 @@ Schema-oriented model registry:
 """
 from app.core.database import (  # noqa: F401
     Base,
-    TEMPLATE_BASE_MODEL,
+    BASE_MODEL,
     TIMESTAMP_MIXIN,
     UUID_BASE_MODEL,
     TimestampMixin,
@@ -29,84 +29,49 @@ from app.models.auth_schema_model import (  # noqa: F401
 from app.models.base_data_schema_model import (  # noqa: F401
     AUTH_TYPE_MODEL,
     BRAND_MODEL,
-    Brand,
     CATEGORY_MODEL,
-    Category,
     COLOR_MODEL,
-    Color,
     CURRENCY_MODEL,
     EXPENSE_CATEGORY_MODEL,
-    ExpenseCategory,
     LABEL_TEMPLATE_MODEL,
-    LabelTemplate,
     LANGUAGE_MODEL,
     PERMISSION_MODEL,
-    Permission,
     ROLE_MODEL,
-    Role,
     SIZE_MODEL,
-    Size,
     STATUS_MODEL,
     TRANSLATE_MODEL,
     role_permissions,
 )
 from app.models.data_schema_model import (  # noqa: F401
     AUDIT_LOG_MODEL,
-    AuditLog,
     BRANCH_MODEL,
-    Branch,
     CATALOG_VERSION_MODEL,
-    CatalogVersion,
     CUSTOMER_MODEL,
-    Customer,
     EXPENSE_MODEL,
-    Expense,
     GOODS_RECEIPT_ITEM_MODEL,
     GOODS_RECEIPT_MODEL,
-    GoodsReceipt,
-    GoodsReceiptItem,
     INVENTORY_MOVEMENT_MODEL,
     INVENTORY_STOCK_MODEL,
-    InventoryMovement,
-    InventoryStock,
     LOYALTY_ACCOUNT_MODEL,
     LOYALTY_TRANSACTION_MODEL,
-    LoyaltyAccount,
-    LoyaltyTransaction,
     NOTIFICATION_SETTING_MODEL,
-    NotificationSetting,
     PAYMENT_TRANSACTION_MODEL,
+    PRODUCT_MODEL,
+    PRODUCT_VARIANT_MODEL,
     PROMOTION_MODEL,
     PURCHASE_ITEM_MODEL,
     PURCHASE_ORDER_MODEL,
-    PaymentTransaction,
-    Product,
-    ProductVariant,
-    Promotion,
-    PurchaseItem,
-    PurchaseOrder,
     REFRESH_TOKEN_MODEL,
     RETURN_ITEM_MODEL,
     RETURN_MODEL,
     RETURN_PAYMENT_MODEL,
-    RefreshToken,
-    Return,
-    ReturnItem,
-    ReturnPayment,
     SALE_ITEM_MODEL,
     SALE_MODEL,
     SALE_PAYMENT_MODEL,
     STOCK_TRANSFER_ITEM_MODEL,
     STOCK_TRANSFER_MODEL,
-    Sale,
-    SaleItem,
-    SalePayment,
-    StockTransfer,
-    StockTransferItem,
-    Supplier,
+    SUPPLIER_MODEL,
     USER_MODEL,
-    User,
-    Warehouse,
     WAREHOUSE_MODEL,
     user_roles,
 )
@@ -119,14 +84,93 @@ from app.models.public_schema_model import (  # noqa: F401
     AlembicVersion,
 )
 
-# Aliases
-PRODUCT_MODEL         = Product
-PRODUCT_VARIANT_MODEL = ProductVariant
-SUPPLIER_MODEL        = Supplier
+# Backward-compatible model aliases
+Role                = ROLE_MODEL
+Permission          = PERMISSION_MODEL
+Category            = CATEGORY_MODEL
+Brand               = BRAND_MODEL
+Color               = COLOR_MODEL
+Size                = SIZE_MODEL
+ExpenseCategory     = EXPENSE_CATEGORY_MODEL
+LabelTemplate       = LABEL_TEMPLATE_MODEL
+
+User                = USER_MODEL
+RefreshToken        = REFRESH_TOKEN_MODEL
+Branch              = BRANCH_MODEL
+Warehouse           = WAREHOUSE_MODEL
+Supplier            = SUPPLIER_MODEL
+Product             = PRODUCT_MODEL
+ProductVariant      = PRODUCT_VARIANT_MODEL
+CatalogVersion      = CATALOG_VERSION_MODEL
+InventoryStock      = INVENTORY_STOCK_MODEL
+InventoryMovement   = INVENTORY_MOVEMENT_MODEL
+StockTransfer       = STOCK_TRANSFER_MODEL
+StockTransferItem   = STOCK_TRANSFER_ITEM_MODEL
+PurchaseOrder       = PURCHASE_ORDER_MODEL
+PurchaseItem        = PURCHASE_ITEM_MODEL
+GoodsReceipt        = GOODS_RECEIPT_MODEL
+GoodsReceiptItem    = GOODS_RECEIPT_ITEM_MODEL
+Sale                = SALE_MODEL
+SaleItem            = SALE_ITEM_MODEL
+SalePayment         = SALE_PAYMENT_MODEL
+Return              = RETURN_MODEL
+ReturnItem          = RETURN_ITEM_MODEL
+ReturnPayment       = RETURN_PAYMENT_MODEL
+Customer            = CUSTOMER_MODEL
+LoyaltyAccount      = LOYALTY_ACCOUNT_MODEL
+LoyaltyTransaction  = LOYALTY_TRANSACTION_MODEL
+PaymentTransaction  = PAYMENT_TRANSACTION_MODEL
+Expense             = EXPENSE_MODEL
+Promotion           = PROMOTION_MODEL
+AuditLog            = AUDIT_LOG_MODEL
+NotificationSetting = NOTIFICATION_SETTING_MODEL
+
+# Declarative class registry bindings for string references
+for _alias, _model in [
+    ("Role", ROLE_MODEL),
+    ("Permission", PERMISSION_MODEL),
+    ("Category", CATEGORY_MODEL),
+    ("Brand", BRAND_MODEL),
+    ("Color", COLOR_MODEL),
+    ("Size", SIZE_MODEL),
+    ("ExpenseCategory", EXPENSE_CATEGORY_MODEL),
+    ("LabelTemplate", LABEL_TEMPLATE_MODEL),
+    ("User", USER_MODEL),
+    ("RefreshToken", REFRESH_TOKEN_MODEL),
+    ("Branch", BRANCH_MODEL),
+    ("Warehouse", WAREHOUSE_MODEL),
+    ("Supplier", SUPPLIER_MODEL),
+    ("Product", PRODUCT_MODEL),
+    ("ProductVariant", PRODUCT_VARIANT_MODEL),
+    ("CatalogVersion", CATALOG_VERSION_MODEL),
+    ("InventoryStock", INVENTORY_STOCK_MODEL),
+    ("InventoryMovement", INVENTORY_MOVEMENT_MODEL),
+    ("StockTransfer", STOCK_TRANSFER_MODEL),
+    ("StockTransferItem", STOCK_TRANSFER_ITEM_MODEL),
+    ("PurchaseOrder", PURCHASE_ORDER_MODEL),
+    ("PurchaseItem", PURCHASE_ITEM_MODEL),
+    ("GoodsReceipt", GOODS_RECEIPT_MODEL),
+    ("GoodsReceiptItem", GOODS_RECEIPT_ITEM_MODEL),
+    ("Sale", SALE_MODEL),
+    ("SaleItem", SALE_ITEM_MODEL),
+    ("SalePayment", SALE_PAYMENT_MODEL),
+    ("Return", RETURN_MODEL),
+    ("ReturnItem", RETURN_ITEM_MODEL),
+    ("ReturnPayment", RETURN_PAYMENT_MODEL),
+    ("Customer", CUSTOMER_MODEL),
+    ("LoyaltyAccount", LOYALTY_ACCOUNT_MODEL),
+    ("LoyaltyTransaction", LOYALTY_TRANSACTION_MODEL),
+    ("PaymentTransaction", PAYMENT_TRANSACTION_MODEL),
+    ("Expense", EXPENSE_MODEL),
+    ("Promotion", PROMOTION_MODEL),
+    ("AuditLog", AUDIT_LOG_MODEL),
+    ("NotificationSetting", NOTIFICATION_SETTING_MODEL),
+]:
+    Base.registry._class_registry[_alias] = _model
 
 __all__ = [
     "Base",
-    "TEMPLATE_BASE_MODEL",
+    "BASE_MODEL",
     "UUID_BASE_MODEL",
     "UUIDBase",
     "SYSTEM_MODEL",

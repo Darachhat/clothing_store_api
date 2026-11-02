@@ -7,12 +7,12 @@ from sqlalchemy import Boolean, DateTime, Integer, JSON, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.database import TEMPLATE_BASE_MODEL
+from app.core.database import BASE_MODEL
 
 JSON_TYPE = JSONB().with_variant(JSON(), "sqlite")
 
 
-class SYSTEM_LOG_MODEL(TEMPLATE_BASE_MODEL):
+class SYSTEM_LOG_MODEL(BASE_MODEL):
     __tablename__               = "system_log"
     __table_args__              = {"schema": "track"}
 
@@ -43,7 +43,7 @@ class SYSTEM_LOG_MODEL(TEMPLATE_BASE_MODEL):
     status_code                 : Mapped[str]                = mapped_column(String(10), default="active", nullable=False)
 
 
-class TELEGRAM_OUTBOUND_MODEL(TEMPLATE_BASE_MODEL):
+class TELEGRAM_OUTBOUND_MODEL(BASE_MODEL):
     __tablename__               = "telegram_outbound"
     __table_args__              = {"schema": "track"}
 

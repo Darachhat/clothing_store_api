@@ -18,7 +18,7 @@ from app.schemas.inventory_schema import (
     STOCK_TRANSFER_CREATE_SCHEMA,
     STOCK_TRANSFER_RESPONSE_SCHEMA,
 )
-from app.services.inventory_service import InventoryService
+from app.services.inventory_service import INVENTORY_SERVICE
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 
@@ -113,7 +113,7 @@ async def create_adjustment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.adjust")),
 ) -> InventoryStock:
-    service = InventoryService(db)
+    service = INVENTORY_SERVICE(db)
     delta = body.quantity_delta
     if delta is None:
         if body.new_quantity is None:
@@ -132,8 +132,8 @@ async def create_adjustment(
         note=body.note,
         created_by=current_user.id,
     )
-    from app.services.product_service import ProductService
-    await ProductService.increment_inventory_version(db)
+    from app.services.product_service import PRODUCT_SERVICE
+    await PRODUCT_SERVICE.increment_inventory_version(db)
     await db.commit()
     return stock
 
@@ -165,7 +165,7 @@ async def create_transfer(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.transfer")),
 ) -> StockTransfer:
-    service = InventoryService(db)
+    service = INVENTORY_SERVICE(db)
     items_data = [{"variant_id": i.variant_id, "quantity": i.quantity} for i in body.items]
     transfer = await service.create_transfer(
         from_warehouse_id=body.from_warehouse_id,
@@ -207,7 +207,7 @@ async def dispatch_transfer(
     current_user: User = Depends(require_permission("inventory.transfer")),
 ) -> StockTransfer:
     from sqlalchemy.orm import selectinload
-    from app.services.product_service import ProductService
+    from app.services.product_service import PRODUCT_SERVICE
 
     result = await db.execute(
         select(StockTransfer).where(StockTransfer.id == id).options(selectinload(StockTransfer.items))
@@ -215,9 +215,9 @@ async def dispatch_transfer(
     transfer = result.scalar_one_or_none()
     if not transfer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transfer not found")
-    service = InventoryService(db)
+    service = INVENTORY_SERVICE(db)
     transfer = await service.dispatch_transfer(transfer, current_user.id)
-    await ProductService.increment_inventory_version(db)
+    await PRODUCT_SERVICE.increment_inventory_version(db)
     await db.commit()
     return transfer
 
@@ -229,7 +229,7 @@ async def receive_transfer(
     current_user: User = Depends(require_permission("inventory.transfer")),
 ) -> StockTransfer:
     from sqlalchemy.orm import selectinload
-    from app.services.product_service import ProductService
+    from app.services.product_service import PRODUCT_SERVICE
 
     result = await db.execute(
         select(StockTransfer).where(StockTransfer.id == id).options(selectinload(StockTransfer.items))
@@ -237,9 +237,9 @@ async def receive_transfer(
     transfer = result.scalar_one_or_none()
     if not transfer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transfer not found")
-    service = InventoryService(db)
+    service = INVENTORY_SERVICE(db)
     transfer = await service.receive_transfer(transfer, current_user.id)
-    await ProductService.increment_inventory_version(db)
+    await PRODUCT_SERVICE.increment_inventory_version(db)
     await db.commit()
     return transfer
 
@@ -251,7 +251,7 @@ async def complete_transfer(
     current_user: User = Depends(require_permission("inventory.transfer")),
 ) -> StockTransfer:
     from sqlalchemy.orm import selectinload
-    from app.services.product_service import ProductService
+    from app.services.product_service import PRODUCT_SERVICE
 
     result = await db.execute(
         select(StockTransfer).where(StockTransfer.id == id).options(selectinload(StockTransfer.items))
@@ -259,9 +259,9 @@ async def complete_transfer(
     transfer = result.scalar_one_or_none()
     if not transfer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transfer not found")
-    service = InventoryService(db)
+    service = INVENTORY_SERVICE(db)
     transfer = await service.complete_transfer(transfer, current_user.id)
-    await ProductService.increment_inventory_version(db)
+    await PRODUCT_SERVICE.increment_inventory_version(db)
     await db.commit()
     return transfer
 
@@ -273,7 +273,7 @@ async def cancel_transfer(
     current_user: User = Depends(require_permission("inventory.transfer")),
 ) -> StockTransfer:
     from sqlalchemy.orm import selectinload
-    from app.services.product_service import ProductService
+    from app.services.product_service import PRODUCT_SERVICE
 
     result = await db.execute(
         select(StockTransfer).where(StockTransfer.id == id).options(selectinload(StockTransfer.items))
@@ -281,8 +281,8 @@ async def cancel_transfer(
     transfer = result.scalar_one_or_none()
     if not transfer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transfer not found")
-    service = InventoryService(db)
+    service = INVENTORY_SERVICE(db)
     transfer = await service.cancel_transfer(transfer, current_user.id)
-    await ProductService.increment_inventory_version(db)
+    await PRODUCT_SERVICE.increment_inventory_version(db)
     await db.commit()
     return transfer

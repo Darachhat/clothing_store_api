@@ -7,12 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cache.cache_service import CacheService
 from app.cache.product_cache import ProductCache
 from app.core.redis import redis_delete, redis_get, redis_incr, redis_set
-from app.services.product_service import ProductService
+from app.services.product_service import PRODUCT_SERVICE
 
 
 class ProductCacheService:
     """
-    Facade preserving existing interface while routing through ProductService & ProductCache.
+    Facade preserving existing interface while routing through PRODUCT_SERVICE & ProductCache.
     PostgreSQL is the source of truth; Redis provides cache-aside performance.
     """
 
@@ -34,7 +34,7 @@ class ProductCacheService:
     @classmethod
     async def get_product_version(cls, db: AsyncSession | None = None) -> int:
         if db is not None:
-            return await ProductService.get_catalog_version(db)
+            return await PRODUCT_SERVICE.get_catalog_version(db)
         ver = await ProductCache.get_cached_catalog_version()
         if ver is not None:
             return ver
@@ -43,7 +43,7 @@ class ProductCacheService:
     @classmethod
     async def increment_product_version(cls, db: AsyncSession | None = None) -> int:
         if db is not None:
-            return await ProductService.increment_catalog_version(db)
+            return await PRODUCT_SERVICE.increment_catalog_version(db)
         # Standalone Redis increment fallback
         from app.core.redis import redis_incr
         new_v = await redis_incr(cls.PRODUCT_VERSION_KEY)
@@ -53,7 +53,7 @@ class ProductCacheService:
     @classmethod
     async def get_inventory_version(cls, db: AsyncSession | None = None) -> int:
         if db is not None:
-            return await ProductService.get_inventory_version(db)
+            return await PRODUCT_SERVICE.get_inventory_version(db)
         ver = await ProductCache.get_cached_inventory_version()
         if ver is not None:
             return ver
@@ -62,7 +62,7 @@ class ProductCacheService:
     @classmethod
     async def increment_inventory_version(cls, db: AsyncSession | None = None) -> int:
         if db is not None:
-            return await ProductService.increment_inventory_version(db)
+            return await PRODUCT_SERVICE.increment_inventory_version(db)
         from app.core.redis import redis_incr
         new_v = await redis_incr(cls.INVENTORY_VERSION_KEY)
         await ProductCache.set_cached_inventory_version(new_v)
@@ -74,5 +74,5 @@ class ProductCacheService:
         db: AsyncSession,
         raw_params: dict[str, Any],
     ) -> tuple[dict[str, Any], bool]:
-        data, is_hit, _ = await ProductService.get_paginated_products(db, raw_params)
+        data, is_hit, _ = await PRODUCT_SERVICE.get_paginated_products(db, raw_params)
         return data, is_hit

@@ -17,7 +17,7 @@ from app.schemas.customer_schema import (
     CUSTOMER_UPDATE_SCHEMA,
     LOYALTY_ACCOUNT_RESPONSE_SCHEMA,
 )
-from app.services.customer_service import CustomerService
+from app.services.customer_service import CUSTOMER_SERVICE
 
 router = APIRouter(prefix="/customers", tags=["Customers & Loyalty"])
 
@@ -31,7 +31,7 @@ async def list_customers(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("customer.read")),
 ) -> CUSTOMER_LIST_OUT_SCHEMA:
-    service = CustomerService(db)
+    service = CUSTOMER_SERVICE(db)
     items, total = await service.repo.search(q=q, status=status, skip=skip, limit=limit)
     return CUSTOMER_LIST_OUT_SCHEMA(
         total=total,
@@ -47,7 +47,7 @@ async def create_customer(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("customer.create")),
 ) -> CUSTOMER_RESPONSE_SCHEMA:
-    service = CustomerService(db)
+    service = CUSTOMER_SERVICE(db)
     customer = await service.create_customer(data)
     return CUSTOMER_RESPONSE_SCHEMA.model_validate(customer)
 
@@ -58,7 +58,7 @@ async def get_customer(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("customer.read")),
 ) -> CUSTOMER_RESPONSE_SCHEMA:
-    service = CustomerService(db)
+    service = CUSTOMER_SERVICE(db)
     customer = await service.get_customer(customer_id)
     return CUSTOMER_RESPONSE_SCHEMA.model_validate(customer)
 
@@ -71,7 +71,7 @@ async def update_customer(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("customer.update")),
 ) -> CUSTOMER_RESPONSE_SCHEMA:
-    service = CustomerService(db)
+    service = CUSTOMER_SERVICE(db)
     customer = await service.update_customer(customer_id, data)
     return CUSTOMER_RESPONSE_SCHEMA.model_validate(customer)
 
@@ -82,7 +82,7 @@ async def delete_customer(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("customer.update")),
 ) -> Response:
-    service = CustomerService(db)
+    service = CUSTOMER_SERVICE(db)
     customer = await service.repo.get_by_id(customer_id)
     if not customer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
@@ -97,7 +97,7 @@ async def get_customer_loyalty(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("customer.read")),
 ) -> LOYALTY_ACCOUNT_RESPONSE_SCHEMA:
-    service = CustomerService(db)
+    service = CUSTOMER_SERVICE(db)
     customer = await service.get_customer(customer_id)
     if not customer.loyalty_account:
         from app.models import LoyaltyAccount
@@ -118,7 +118,7 @@ async def adjust_loyalty_points(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("customer.update")),
 ) -> LOYALTY_ACCOUNT_RESPONSE_SCHEMA:
-    service = CustomerService(db)
+    service = CUSTOMER_SERVICE(db)
     account = await service.adjust_loyalty_points(
         customer_id=customer_id,
         points=payload.points,
