@@ -184,9 +184,19 @@ app.add_middleware(TRACE_MIDDLEWARE)
 
 
 # ── Static Files & API Routers ────────────────────────────────────────────────
-uploads_dir = "/app/uploads"
-if os.path.exists(uploads_dir):
-    app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+candidate_uploads = [
+    os.getenv("UPLOAD_DIR", "/app/uploads"),
+    "/app/uploads",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads")),
+    os.path.abspath(os.path.join(os.getcwd(), "uploads")),
+]
+uploads_dir = next((p for p in candidate_uploads if os.path.isdir(p)), None)
+if not uploads_dir:
+    uploads_dir = "/app/uploads"
+    os.makedirs(uploads_dir, exist_ok=True)
+
+logger.info(f"Mounting static uploads from: {uploads_dir}")
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 # Unified v1 API Router (/api/v1/*)
 app.include_router(api_v1_router, prefix=settings.API_V1_STR)

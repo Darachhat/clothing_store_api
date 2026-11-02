@@ -15,7 +15,7 @@ venv/
 
 # Runtime artifacts
 logs/
-uploads/
+# uploads/ (seed images tracked for production serving)
 celerybeat-schedule*
 *.log
 *.db
