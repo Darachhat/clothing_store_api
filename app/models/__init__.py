@@ -56,6 +56,7 @@ from app.models.data_schema_model import (  # noqa: F401
     LOYALTY_TRANSACTION_MODEL,
     NOTIFICATION_SETTING_MODEL,
     PAYMENT_TRANSACTION_MODEL,
+    POS_TERMINAL_MODEL,
     PRODUCT_MODEL,
     PRODUCT_VARIANT_MODEL,
     PROMOTION_MODEL,
@@ -98,6 +99,7 @@ User                = USER_MODEL
 RefreshToken        = REFRESH_TOKEN_MODEL
 Branch              = BRANCH_MODEL
 Warehouse           = WAREHOUSE_MODEL
+PosTerminal         = POS_TERMINAL_MODEL
 Supplier            = SUPPLIER_MODEL
 Product             = PRODUCT_MODEL
 ProductVariant      = PRODUCT_VARIANT_MODEL

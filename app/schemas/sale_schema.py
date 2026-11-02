@@ -61,6 +61,7 @@ class SALE_PAYMENT_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
 class SALE_CREATE_SCHEMA(BaseModel):
     branch_id       : Optional[uuid.UUID]            = None
     warehouse_id    : Optional[uuid.UUID]            = None
+    terminal_id     : Optional[uuid.UUID]            = None
     customer_id     : Optional[uuid.UUID]            = None
     items           : List[SALE_ITEM_CREATE_SCHEMA]
     discount_amount : Decimal                        = Decimal("0")
@@ -97,6 +98,8 @@ class SALE_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
     notes           : Optional[str]                     = None
     cashier_id      : uuid.UUID
     cashier_name    : Optional[str]                     = None
+    terminal_id     : Optional[uuid.UUID]               = None
+    terminal_code   : Optional[str]                     = None
     promotion_id    : Optional[uuid.UUID]               = None
     items           : List[SALE_ITEM_RESPONSE_SCHEMA]    = []
     payments        : List[SALE_PAYMENT_RESPONSE_SCHEMA] = []

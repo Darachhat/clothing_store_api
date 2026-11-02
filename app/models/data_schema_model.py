@@ -147,6 +147,42 @@ class WAREHOUSE_MODEL(BASE_MODEL):
     )
 
 
+# ── POS_TERMINAL_MODEL ────────────────────────────────────────────────────────
+class POS_TERMINAL_MODEL(BASE_MODEL):
+    __tablename__               = "pos_terminals"
+    __table_args__              = (
+        UniqueConstraint("branch_id", "code", name="uq_branch_terminal_code"),
+        {"schema": "data"},
+    )
+
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    branch_id                   : Mapped[uuid.UUID]                 = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.branches.id", ondelete="RESTRICT"), nullable=False
+    )
+    warehouse_id                : Mapped[uuid.UUID]                 = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.warehouses.id", ondelete="RESTRICT"), nullable=False
+    )
+    code                        : Mapped[str]                       = mapped_column(String(50), nullable=False)
+    name                        : Mapped[str]                       = mapped_column(String(100), nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(20), default="ACTIVE", nullable=False)
+    notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    last_active_at              : Mapped[Optional[datetime]]        = mapped_column(DateTime(timezone=True), nullable=True)
+
+    branch                      : Mapped[BRANCH_MODEL]              = relationship("BRANCH_MODEL")
+    warehouse                   : Mapped[WAREHOUSE_MODEL]           = relationship("WAREHOUSE_MODEL")
+    sales                       : Mapped[list[SALE_MODEL]]          = relationship("SALE_MODEL", back_populates="terminal")
+
+    @property
+    def branch_name(self) -> str | None:
+        br = self.__dict__.get("branch")
+        return getattr(br, "name", None) if br is not None else None
+
+    @property
+    def warehouse_name(self) -> str | None:
+        wh = self.__dict__.get("warehouse")
+        return getattr(wh, "name", None) if wh is not None else None
+
+
 # ── SUPPLIER_MODEL ────────────────────────────────────────────────────────────
 class SUPPLIER_MODEL(BASE_MODEL):
     __tablename__               = "suppliers"
@@ -498,6 +534,9 @@ class SALE_MODEL(BASE_MODEL):
     promotion_id                : Mapped[Optional[uuid.UUID]]       = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.promotions.id", ondelete="SET NULL"), nullable=True
     )
+    terminal_id                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.pos_terminals.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
     customer                    : Mapped[Optional[CUSTOMER_MODEL]]  = relationship("CUSTOMER_MODEL", back_populates="sales")
@@ -505,6 +544,7 @@ class SALE_MODEL(BASE_MODEL):
     warehouse                   : Mapped[WAREHOUSE_MODEL]           = relationship("WAREHOUSE_MODEL")
     cashier                     : Mapped[USER_MODEL]                = relationship("USER_MODEL")
     promotion                   : Mapped[Optional[PROMOTION_MODEL]] = relationship("PROMOTION_MODEL")
+    terminal                    : Mapped[Optional[POS_TERMINAL_MODEL]] = relationship("POS_TERMINAL_MODEL", back_populates="sales")
     items                       : Mapped[list[SALE_ITEM_MODEL]]     = relationship(
         "SALE_ITEM_MODEL", back_populates="sale", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -528,6 +568,11 @@ class SALE_MODEL(BASE_MODEL):
         if cs is None:
             return None
         return getattr(cs, "full_name", None) or getattr(cs, "username", None)
+
+    @property
+    def terminal_code(self) -> str | None:
+        term = self.__dict__.get("terminal")
+        return getattr(term, "code", None) if term is not None else None
 
 
 # ── SALE_ITEM_MODEL ───────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ from app.api.v1.handlers.log_handler import router as log_router
 from app.api.v1.handlers.product_handler import router as products_router, variant_router
 from app.api.v1.handlers.attachment_handler import router as attachments_router, uploads_router
 from app.api.v1.handlers.branch_handler import router as branches_router, warehouses_router
+from app.api.v1.handlers.terminal_handler import router as terminals_router
 from app.api.v1.handlers.catalog_handler import (
     brands_router
     , categories_router
@@ -65,4 +66,5 @@ router.include_router(users_router)
 router.include_router(roles_router)
 router.include_router(branches_router)
 router.include_router(warehouses_router)
+router.include_router(terminals_router)
 router.include_router(audit_router)

@@ -39,6 +39,7 @@ def _sale_eager_options():
         selectinload(Sale.customer),
         selectinload(Sale.branch),
         selectinload(Sale.cashier),
+        selectinload(Sale.terminal),
     )
 
 
@@ -89,6 +90,7 @@ async def create_sale(
         tax_amount=body.tax_amount,
         notes=body.notes,
         promotion_id=body.promotion_id,
+        terminal_id=body.terminal_id,
         payments=payments_data,
         background_tasks=background_tasks,
     )

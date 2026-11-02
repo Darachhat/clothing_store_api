@@ -1,6 +1,7 @@
 """Sale service: create sale, process payment, returns."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -21,6 +22,7 @@ from app.core.exceptions import BAD_REQUEST_EXCEPTION, NOT_FOUND_EXCEPTION
 from app.core.logging import get_logger
 from app.models import (
     Branch
+    , PosTerminal
     , ProductVariant
     , Return
     , ReturnItem
@@ -72,11 +74,29 @@ class SALE_SERVICE:
         , tax_amount      : Decimal = Decimal("0")
         , notes           : Optional[str]                  = None
         , promotion_id    : Optional[UUID]                 = None
+        , terminal_id     : Optional[UUID]                 = None
         , payments        : Optional[List[Dict[str, Any]]] = None
         , background_tasks: Optional[BackgroundTasks]      = None
     ) -> Sale:
         """Create a sale (and optionally complete & collect payments in 1 transaction)."""
         global _DEFAULT_BRANCH_ID, _DEFAULT_WAREHOUSE_ID
+
+        if terminal_id:
+            term = (
+                await self.db.execute(
+                    select(PosTerminal).where(PosTerminal.id == terminal_id)
+                )
+            ).scalar_one_or_none()
+            if not term:
+                raise NOT_FOUND_EXCEPTION(f"POS Terminal '{terminal_id}' not found")
+            if term.status_code != "ACTIVE":
+                raise BAD_REQUEST_EXCEPTION(f"POS Terminal '{term.name}' is currently {term.status_code}")
+            # Ensure branch matches terminal if terminal has an assigned branch
+            if not branch_id and term.branch_id:
+                branch_id = term.branch_id
+            if not warehouse_id and term.warehouse_id:
+                warehouse_id = term.warehouse_id
+            term.last_active_at = datetime.now(timezone.utc)
 
         if not branch_id and _DEFAULT_BRANCH_ID:
             branch_id = _DEFAULT_BRANCH_ID
@@ -189,6 +209,7 @@ class SALE_SERVICE:
             , notes         = notes
             , cashier_id    = cashier_id
             , promotion_id  = promotion_id
+            , terminal_id   = terminal_id
         )
         self.db.add(sale)
 

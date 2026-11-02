@@ -17,14 +17,14 @@ depends_on = None
 def upgrade() -> None:
     op.execute(
         """
-        INSERT INTO permissions (id, code, name, module, created_at, updated_at)
-        SELECT gen_random_uuid(), 'purchase.create', 'Create / Approve Purchase Orders', 'purchases', NOW(), NOW()
-        WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE code = 'purchase.create');
+        INSERT INTO base_data.permissions (id, code, name, module, status_code)
+        SELECT gen_random_uuid(), 'purchase.create', 'Create / Approve Purchase Orders', 'purchases', 'ACTIVE'
+        WHERE NOT EXISTS (SELECT 1 FROM base_data.permissions WHERE code = 'purchase.create');
 
-        INSERT INTO role_permissions (role_id, permission_id)
+        INSERT INTO base_data.role_permissions (role_id, permission_id)
         SELECT r.id, p.id
-        FROM roles r
-        CROSS JOIN permissions p
+        FROM base_data.roles r
+        CROSS JOIN base_data.permissions p
         WHERE p.code = 'purchase.create'
           AND r.name IN ('ADMIN', 'MANAGER', 'WAREHOUSE')
         ON CONFLICT DO NOTHING;
@@ -35,10 +35,10 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.execute(
         """
-        DELETE FROM role_permissions
-        WHERE permission_id IN (SELECT id FROM permissions WHERE code = 'purchase.create');
+        DELETE FROM base_data.role_permissions
+        WHERE permission_id IN (SELECT id FROM base_data.permissions WHERE code = 'purchase.create');
 
-        DELETE FROM permissions WHERE code = 'purchase.create';
+        DELETE FROM base_data.permissions WHERE code = 'purchase.create';
         """
     )
 
