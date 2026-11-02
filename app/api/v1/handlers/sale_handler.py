@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -64,6 +64,7 @@ async def list_sales(
 @router.post("/", response_model=SALE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_sale(
     body: SALE_CREATE_SCHEMA,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("sale.create")),
 ) -> Sale:
@@ -77,6 +78,7 @@ async def create_sale(
         }
         for item in body.items
     ]
+    payments_data = [p.model_dump() for p in body.payments] if body.payments else None
     sale = await service.create_sale(
         branch_id=body.branch_id,
         warehouse_id=body.warehouse_id,
@@ -87,14 +89,11 @@ async def create_sale(
         tax_amount=body.tax_amount,
         notes=body.notes,
         promotion_id=body.promotion_id,
+        payments=payments_data,
+        background_tasks=background_tasks,
     )
     await db.commit()
-    res = await db.execute(
-        select(Sale)
-        .where(Sale.id == sale.id)
-        .options(*_sale_eager_options())
-    )
-    return res.scalar_one()
+    return sale
 
 
 @router.get("/returns", response_model=list[RETURN_RESPONSE_SCHEMA])
@@ -181,13 +180,14 @@ async def create_sale_return(
 async def complete_sale(
     id: UUID,
     body: SALE_COMPLETE_SCHEMA,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("sale.create")),
 ) -> Sale:
     result = await db.execute(
         select(Sale)
         .where(Sale.id == id)
-        .options(selectinload(Sale.items))
+        .options(selectinload(Sale.items).selectinload(SaleItem.variant))
     )
     sale = result.scalar_one_or_none()
     if not sale:
@@ -197,16 +197,10 @@ async def complete_sale(
     sale = await service.complete_sale(
         sale,
         [p.model_dump() for p in body.payments],
+        background_tasks=background_tasks,
     )
-    from app.services.product_service import PRODUCT_SERVICE
-    await PRODUCT_SERVICE.increment_inventory_version(db)
     await db.commit()
-    res = await db.execute(
-        select(Sale)
-        .where(Sale.id == sale.id)
-        .options(*_sale_eager_options())
-    )
-    return res.scalar_one()
+    return sale
 
 
 @router.post("/{id}/cancel", response_model=SALE_RESPONSE_SCHEMA)

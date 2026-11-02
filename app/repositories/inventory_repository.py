@@ -68,7 +68,6 @@ class InventoryStockRepository(BaseRepository[InventoryStock]):
             )
 
         stock.quantity = after
-        await self.db.flush()
 
         movement = InventoryMovement(
             variant_id=variant_id,
@@ -83,5 +82,4 @@ class InventoryStockRepository(BaseRepository[InventoryStock]):
             created_by=created_by,
         )
         self.db.add(movement)
-        await self.db.flush()
         return stock, movement

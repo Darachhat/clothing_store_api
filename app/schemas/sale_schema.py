@@ -67,6 +67,7 @@ class SALE_CREATE_SCHEMA(BaseModel):
     tax_amount      : Decimal                        = Decimal("0")
     notes           : Optional[str]                  = None
     promotion_id    : Optional[uuid.UUID]            = None
+    payments        : Optional[List[SALE_PAYMENT_CREATE_SCHEMA]] = None
 
     model_config = {"from_attributes": True}
 

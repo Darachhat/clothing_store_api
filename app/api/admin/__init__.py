@@ -29,6 +29,9 @@ from app.api.v1.endpoints.reports import router as reports_router
 from app.api.v1.endpoints.sales import returns_router, router as sales_router
 from app.api.v1.endpoints.users import roles_router, users_router
 from app.api.v1.handlers.audit_handler import router as audit_router
+from app.api.v1.handlers.log_handler import router as log_router
+from app.api.v1.handlers.system_handler import router as system_router
+from app.api.v1.handlers.telegram_handler import router as telegram_router
 
 # Root lane router
 admin_router = APIRouter(prefix="/api/admin/v1", tags=["[Admin Lane]"])
@@ -63,5 +66,8 @@ _protected.include_router(warehouses_router)
 _protected.include_router(attachments_router)
 _protected.include_router(uploads_router)
 _protected.include_router(audit_router)
+_protected.include_router(log_router)
+_protected.include_router(system_router)
+_protected.include_router(telegram_router)
 
 admin_router.include_router(_protected)

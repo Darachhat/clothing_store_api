@@ -7,6 +7,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import BackgroundTasks
 
 from app.core.enum.common_enum import (
     COMMON_STATUS_ENUM
@@ -20,6 +21,7 @@ from app.core.exceptions import BAD_REQUEST_EXCEPTION, NOT_FOUND_EXCEPTION
 from app.core.logging import get_logger
 from app.models import (
     Branch
+    , ProductVariant
     , Return
     , ReturnItem
     , ReturnPayment
@@ -38,8 +40,17 @@ from app.schemas.sale_schema import (
     , SALE_RESPONSE_SCHEMA
 )
 from app.utils.generators import generate_invoice_number, generate_return_number
+from app.tasks.sale_background import (
+    bg_record_sale_audit,
+    bg_award_loyalty_points,
+    bg_increment_inventory_cache,
+)
 
 logger = get_logger(__name__)
+
+# Process-level cached defaults to prevent repetitive roundtrips
+_DEFAULT_BRANCH_ID: Optional[UUID] = None
+_DEFAULT_WAREHOUSE_ID: Optional[UUID] = None
 
 
 class SALE_SERVICE:
@@ -59,10 +70,19 @@ class SALE_SERVICE:
         , customer_id     : Optional[UUID] = None
         , discount_amount : Decimal = Decimal("0")
         , tax_amount      : Decimal = Decimal("0")
-        , notes           : Optional[str] = None
-        , promotion_id    : Optional[UUID] = None
+        , notes           : Optional[str]                  = None
+        , promotion_id    : Optional[UUID]                 = None
+        , payments        : Optional[List[Dict[str, Any]]] = None
+        , background_tasks: Optional[BackgroundTasks]      = None
     ) -> Sale:
-        """Create a sale and reduce stock atomically."""
+        """Create a sale (and optionally complete & collect payments in 1 transaction)."""
+        global _DEFAULT_BRANCH_ID, _DEFAULT_WAREHOUSE_ID
+
+        if not branch_id and _DEFAULT_BRANCH_ID:
+            branch_id = _DEFAULT_BRANCH_ID
+        if not warehouse_id and _DEFAULT_WAREHOUSE_ID:
+            warehouse_id = _DEFAULT_WAREHOUSE_ID
+
         if not branch_id or not warehouse_id:
             if not branch_id:
                 branch = (
@@ -77,6 +97,7 @@ class SALE_SERVICE:
                     branch = (await self.db.execute(select(Branch).limit(1))).scalar_one_or_none()
                 if branch:
                     branch_id = branch.id
+                    _DEFAULT_BRANCH_ID = branch_id
 
             if not warehouse_id and branch_id:
                 wh = (
@@ -92,22 +113,32 @@ class SALE_SERVICE:
                 ).scalar_one_or_none()
                 if wh:
                     warehouse_id = wh.id
+                    _DEFAULT_WAREHOUSE_ID = warehouse_id
 
             if not warehouse_id:
                 wh_any = (await self.db.execute(select(Warehouse).limit(1))).scalar_one_or_none()
                 if wh_any:
                     warehouse_id = wh_any.id
+                    _DEFAULT_WAREHOUSE_ID = warehouse_id
                     if not branch_id:
                         branch_id = wh_any.branch_id
+                        _DEFAULT_BRANCH_ID = branch_id
 
         invoice_number = await generate_invoice_number(self.db)
+
+        # Batch lookup all variants in 1 query to avoid N sequential network roundtrips
+        variant_ids = [item_data["variant_id"] for item_data in items_data]
+        res_variants = await self.db.execute(
+            select(ProductVariant).where(ProductVariant.id.in_(variant_ids))
+        )
+        variant_map = {v.id: v for v in res_variants.scalars().all()}
 
         # Calculate totals
         subtotal = Decimal("0")
         sale_items = []
 
         for item_data in items_data:
-            variant = await self.variant_repo.get_by_id(item_data["variant_id"])
+            variant = variant_map.get(item_data["variant_id"])
             if not variant:
                 raise NOT_FOUND_EXCEPTION(f"Variant {item_data['variant_id']} not found")
 
@@ -160,20 +191,95 @@ class SALE_SERVICE:
             , promotion_id  = promotion_id
         )
         self.db.add(sale)
-        await self.db.flush()
 
         for item_data in sale_items:
             si = SaleItem(sale=sale, **item_data)
             self.db.add(si)
 
-        await self.db.flush()
-        await self.db.refresh(sale, ["items"])
+        # If payments provided, complete the sale directly in the same transaction
+        if payments:
+            total_paid = sum(Decimal(str(p["amount"])) for p in payments)
+            for p in payments:
+                sp = SalePayment(
+                    sale             = sale
+                    , payment_method = p["payment_method"]
+                    , amount         = Decimal(str(p["amount"]))
+                    , reference_number = p.get("reference_number")
+                )
+                self.db.add(sp)
+
+            # Decrease stock for each item
+            for item in sale_items:
+                await self.stock_repo.adjust_stock(
+                    variant_id     = item["variant_id"]
+                    , warehouse_id   = sale.warehouse_id
+                    , delta          = -item["quantity"]
+                    , movement_type  = INVENTORY_MOVEMENT_TYPE_ENUM.SALE.value
+                    , reference_type = REFERENCE_TYPE_ENUM.SALE.value
+                    , reference_id   = sale.id
+                    , created_by     = sale.cashier_id
+                )
+
+            sale.sale_status = SALE_STATUS_ENUM.COMPLETED.value
+            if total_paid >= sale.total:
+                sale.payment_status = PAYMENT_STATUS_ENUM.PAID.value
+            else:
+                sale.payment_status = PAYMENT_STATUS_ENUM.PARTIAL.value
+
+            # Offload non-critical side effects to background tasks
+            if background_tasks is not None:
+                background_tasks.add_task(
+                    bg_record_sale_audit,
+                    sale.cashier_id,
+                    sale.id,
+                    sale.invoice_number,
+                    str(sale.total),
+                    sale.payment_status,
+                )
+                if sale.customer_id and sale.payment_status == PAYMENT_STATUS_ENUM.PAID.value:
+                    points_to_earn = int(sale.total)
+                    if points_to_earn > 0:
+                        background_tasks.add_task(
+                            bg_award_loyalty_points,
+                            sale.customer_id,
+                            points_to_earn,
+                            sale.id,
+                            sale.invoice_number,
+                        )
+                background_tasks.add_task(bg_increment_inventory_cache)
+            else:
+                if sale.customer_id and sale.payment_status == PAYMENT_STATUS_ENUM.PAID.value:
+                    from app.services.customer_service import CUSTOMER_SERVICE
+                    cust_svc = CUSTOMER_SERVICE(self.db)
+                    points_to_earn = int(sale.total)
+                    if points_to_earn > 0:
+                        await cust_svc.award_sale_points(
+                            customer_id    = sale.customer_id
+                            , points         = points_to_earn
+                            , sale_id        = sale.id
+                            , invoice_number = sale.invoice_number
+                        )
+                from app.services.audit_service import AUDIT_SERVICE
+                await AUDIT_SERVICE.record(
+                    self.db
+                    , action      = "SALE_COMPLETED"
+                    , entity_type = "sale"
+                    , entity_id   = sale.id
+                    , user_id     = sale.cashier_id
+                    , new_data    = {
+                        "invoice_number": sale.invoice_number
+                        , "total": str(sale.total)
+                        , "payment_status": sale.payment_status
+                    }
+                )
+
         return sale
 
     async def complete_sale(
         self
-        , sale     : Sale
-        , payments : List[Dict[str, Any]]
+        , sale            : Sale
+        , payments        : List[Dict[str, Any]]
+        , background_tasks: Optional[BackgroundTasks] = None
     ) -> Sale:
         """Mark sale complete, collect payments, decrement inventory."""
         if sale.sale_status != SALE_STATUS_ENUM.DRAFT.value:
@@ -184,7 +290,7 @@ class SALE_SERVICE:
         # Create payment records
         for p in payments:
             sp = SalePayment(
-                sale_id          = sale.id
+                sale             = sale
                 , payment_method = p["payment_method"]
                 , amount         = Decimal(str(p["amount"]))
                 , reference_number = p.get("reference_number")
@@ -209,35 +315,53 @@ class SALE_SERVICE:
         else:
             sale.payment_status = PAYMENT_STATUS_ENUM.PARTIAL.value
 
-        # Award loyalty points if customer is linked and sale is paid
-        if sale.customer_id and sale.payment_status == PAYMENT_STATUS_ENUM.PAID.value:
-            from app.services.customer_service import CUSTOMER_SERVICE
+        # Offload non-critical side effects to background tasks
+        if background_tasks is not None:
+            background_tasks.add_task(
+                bg_record_sale_audit,
+                sale.cashier_id,
+                sale.id,
+                sale.invoice_number,
+                str(sale.total),
+                sale.payment_status,
+            )
+            if sale.customer_id and sale.payment_status == PAYMENT_STATUS_ENUM.PAID.value:
+                points_to_earn = int(sale.total)
+                if points_to_earn > 0:
+                    background_tasks.add_task(
+                        bg_award_loyalty_points,
+                        sale.customer_id,
+                        points_to_earn,
+                        sale.id,
+                        sale.invoice_number,
+                    )
+            background_tasks.add_task(bg_increment_inventory_cache)
+        else:
+            if sale.customer_id and sale.payment_status == PAYMENT_STATUS_ENUM.PAID.value:
+                from app.services.customer_service import CUSTOMER_SERVICE
+                cust_svc = CUSTOMER_SERVICE(self.db)
+                points_to_earn = int(sale.total)
+                if points_to_earn > 0:
+                    await cust_svc.award_sale_points(
+                        customer_id    = sale.customer_id
+                        , points         = points_to_earn
+                        , sale_id        = sale.id
+                        , invoice_number = sale.invoice_number
+                    )
+            from app.services.audit_service import AUDIT_SERVICE
+            await AUDIT_SERVICE.record(
+                self.db
+                , action      = "SALE_COMPLETED"
+                , entity_type = "sale"
+                , entity_id   = sale.id
+                , user_id     = sale.cashier_id
+                , new_data    = {
+                    "invoice_number": sale.invoice_number
+                    , "total": str(sale.total)
+                    , "payment_status": sale.payment_status
+                }
+            )
 
-            cust_svc = CUSTOMER_SERVICE(self.db)
-            points_to_earn = int(sale.total)
-            if points_to_earn > 0:
-                await cust_svc.award_sale_points(
-                    customer_id    = sale.customer_id
-                    , points         = points_to_earn
-                    , sale_id        = sale.id
-                    , invoice_number = sale.invoice_number
-                )
-
-        from app.services.audit_service import AUDIT_SERVICE
-
-        await AUDIT_SERVICE.record(
-            self.db
-            , action      = "SALE_COMPLETED"
-            , entity_type = "sale"
-            , entity_id   = sale.id
-            , user_id     = sale.cashier_id
-            , new_data    = {
-                "invoice_number": sale.invoice_number
-                , "total": str(sale.total)
-                , "payment_status": sale.payment_status
-            }
-        )
-        await self.db.flush()
         return sale
 
     async def cancel_sale(self, sale: Sale, cancelled_by: UUID) -> Sale:
