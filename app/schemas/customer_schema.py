@@ -1,67 +1,31 @@
 """Customer and Loyalty Pydantic schemas."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from typing import Any, List, Optional
 import uuid
 from pydantic.main import BaseModel
-from pydantic import EmailStr, Field, model_validator
+from pydantic import AliasChoices, EmailStr, Field, model_validator
+
+from app.schemas.base_schema import BASE_AUDIT_RESPONSE_SCHEMA, BASE_TIMESTAMP_RESPONSE_SCHEMA
 
 
-class LOYALTY_TRANSACTION_RESPONSE_SCHEMA(BaseModel):
-    id                 : uuid.UUID
+class LOYALTY_TRANSACTION_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
     account_id         : uuid.UUID
     transaction_type   : str
     points             : int
     reference_type     : Optional[str]       = None
     reference_id       : Optional[uuid.UUID] = None
     note               : Optional[str]       = None
-    status_code        : str                 = "ACTIVE"
-    created_datetime   : Optional[datetime]  = None
-    updated_datetime   : Optional[datetime]  = None
-    created_at         : Optional[datetime]  = None
-    updated_at         : Optional[datetime]  = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
 
 
-class LOYALTY_ACCOUNT_RESPONSE_SCHEMA(BaseModel):
-    id                    : uuid.UUID
+class LOYALTY_ACCOUNT_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
     customer_id           : uuid.UUID
     points_balance        : int                                       = 0
     total_points_earned   : int                                       = 0
     total_points_redeemed : int                                       = 0
     tier                  : str                                       = "BRONZE"
-    status_code           : str                                       = "ACTIVE"
-    created_datetime      : Optional[datetime]                        = None
-    updated_datetime      : Optional[datetime]                        = None
-    created_at            : Optional[datetime]                        = None
-    updated_at            : Optional[datetime]                        = None
     transactions          : List[LOYALTY_TRANSACTION_RESPONSE_SCHEMA]  = []
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
 
 
 class CUSTOMER_BASE_SCHEMA(BaseModel):
@@ -110,28 +74,10 @@ class CUSTOMER_UPDATE_SCHEMA(BaseModel):
         return data
 
 
-class CUSTOMER_RESPONSE_SCHEMA(CUSTOMER_BASE_SCHEMA):
+class CUSTOMER_RESPONSE_SCHEMA(CUSTOMER_BASE_SCHEMA, BASE_TIMESTAMP_RESPONSE_SCHEMA):
     id               : uuid.UUID
     customer_code    : str
-    created_datetime : Optional[datetime]                        = None
-    updated_datetime : Optional[datetime]                        = None
-    created_at       : Optional[datetime]                        = None
-    updated_at       : Optional[datetime]                        = None
     loyalty_account  : Optional[LOYALTY_ACCOUNT_RESPONSE_SCHEMA] = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        super().model_post_init(__context)
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
 
 
 class CUSTOMER_LIST_OUT_SCHEMA(BaseModel):
@@ -144,22 +90,10 @@ class CUSTOMER_LIST_OUT_SCHEMA(BaseModel):
 
 
 class ADJUST_POINTS_REQUEST_SCHEMA(BaseModel):
-    points         : int
-    note           : Optional[str]       = None
+    points         : int                 = Field(..., validation_alias=AliasChoices("points", "points_delta"))
+    note           : Optional[str]       = Field(default=None, validation_alias=AliasChoices("note", "reason"))
     reference_type : Optional[str]       = None
     reference_id   : Optional[uuid.UUID] = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_loyalty_aliases(cls, data: Any) -> Any:
-        if not isinstance(data, dict):
-            return data
-        out = dict(data)
-        if out.get("points") is None and out.get("points_delta") is not None:
-            out["points"] = int(out["points_delta"])
-        if out.get("note") is None and out.get("reason") is not None:
-            out["note"] = str(out["reason"])
-        return out
 
 
 LOYALTY_ADJUST_REQUEST_SCHEMA = ADJUST_POINTS_REQUEST_SCHEMA
@@ -197,5 +131,3 @@ __all__ = [
     "LOYALTY_AWARD_REQUEST_SCHEMA",
     "LOYALTY_CLAWBACK_REQUEST_SCHEMA",
 ]
-
-

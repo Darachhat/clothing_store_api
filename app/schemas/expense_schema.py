@@ -1,12 +1,14 @@
 """Expense and ExpenseCategory schemas."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import Any, List, Optional
 import uuid
 from pydantic.main import BaseModel
 from pydantic import Field, field_validator
+
+from app.schemas.base_schema import BASE_AUDIT_RESPONSE_SCHEMA, BASE_STATUS_UPDATE_SCHEMA
 
 
 class EXPENSE_CATEGORY_CREATE_SCHEMA(BaseModel):
@@ -26,36 +28,11 @@ class EXPENSE_CATEGORY_UPDATE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class EXPENSE_CATEGORY_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    name             : str
-    code             : str
-    description      : Optional[str]      = None
-    is_system        : bool               = False
-    status           : str                = "ACTIVE"
-    status_code      : str                = "ACTIVE"
-    created_datetime : Optional[datetime] = None
-    updated_datetime : Optional[datetime] = None
-    created_at       : Optional[datetime] = None
-    updated_at       : Optional[datetime] = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+class EXPENSE_CATEGORY_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    name        : str
+    code        : str
+    description : Optional[str] = None
+    is_system   : bool          = False
 
 
 class EXPENSE_CREATE_SCHEMA(BaseModel):
@@ -79,7 +56,7 @@ class EXPENSE_CREATE_SCHEMA(BaseModel):
         return v
 
 
-class EXPENSE_UPDATE_SCHEMA(BaseModel):
+class EXPENSE_UPDATE_SCHEMA(BASE_STATUS_UPDATE_SCHEMA):
     category_id    : Optional[uuid.UUID] = None
     branch_id      : Optional[uuid.UUID] = None
     amount         : Optional[Decimal]   = Field(default=None, gt=0)
@@ -88,56 +65,21 @@ class EXPENSE_UPDATE_SCHEMA(BaseModel):
     description    : Optional[str]       = None
     receipt_url    : Optional[str]       = None
     notes          : Optional[str]       = None
-    status         : Optional[str]       = None
-    status_code    : Optional[str]       = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
 
 
-class EXPENSE_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    expense_number   : str
-    category_id      : uuid.UUID
-    branch_id        : uuid.UUID
-    amount           : Decimal
-    description      : Optional[str]                               = None
-    payment_method   : str
-    receipt_url      : Optional[str]                               = None
-    expense_date     : date
-    created_by       : Optional[Any]                               = None
-    approved_by      : Optional[Any]                               = None
-    status           : str                                         = "ACTIVE"
-    status_code      : str                                         = "ACTIVE"
-    notes            : Optional[str]                               = None
-    category         : Optional[EXPENSE_CATEGORY_RESPONSE_SCHEMA]  = None
-    created_datetime : Optional[datetime]                          = None
-    updated_datetime : Optional[datetime]                          = None
-    created_at       : Optional[datetime]                          = None
-    updated_at       : Optional[datetime]                          = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+class EXPENSE_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    expense_number : str
+    category_id    : uuid.UUID
+    branch_id      : uuid.UUID
+    amount         : Decimal
+    description    : Optional[str]                              = None
+    payment_method : str
+    receipt_url    : Optional[str]                              = None
+    expense_date   : date
+    created_by     : Optional[Any]                              = None
+    approved_by    : Optional[Any]                              = None
+    notes          : Optional[str]                              = None
+    category       : Optional[EXPENSE_CATEGORY_RESPONSE_SCHEMA] = None
 
 
 class EXPENSE_LIST_OUT_SCHEMA(BaseModel):
@@ -158,4 +100,3 @@ __all__ = [
     "EXPENSE_RESPONSE_SCHEMA",
     "EXPENSE_LIST_OUT_SCHEMA",
 ]
-

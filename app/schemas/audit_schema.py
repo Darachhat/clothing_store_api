@@ -1,11 +1,12 @@
 """Audit logging schemas following system_log_schema.py template."""
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 import uuid
 from pydantic.main import BaseModel
 from pydantic import Field
+
+from app.schemas.base_schema import BASE_TIMESTAMP_RESPONSE_SCHEMA
 
 
 class AUDIT_LOG_CREATE_REQUEST_SCHEMA(BaseModel):
@@ -21,7 +22,7 @@ class AUDIT_LOG_CREATE_REQUEST_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class AUDIT_LOG_RESPONSE_SCHEMA(BaseModel):
+class AUDIT_LOG_RESPONSE_SCHEMA(BASE_TIMESTAMP_RESPONSE_SCHEMA):
     id          : uuid.UUID
     action      : str
     entity_type : Optional[str]            = None
@@ -31,16 +32,6 @@ class AUDIT_LOG_RESPONSE_SCHEMA(BaseModel):
     new_data    : Optional[Dict[str, Any]] = None
     ip_address  : Optional[str]            = None
     user_agent  : Optional[str]            = None
-    created_at  : Optional[datetime]       = None
-    created_datetime : Optional[datetime]  = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
 
 
 class AUDIT_LOG_LIST_OUT_SCHEMA(BaseModel):
@@ -55,4 +46,3 @@ __all__ = [
     "AUDIT_LOG_RESPONSE_SCHEMA",
     "AUDIT_LOG_LIST_OUT_SCHEMA",
 ]
-

@@ -1,12 +1,13 @@
 """Product catalog schemas."""
 from __future__ import annotations
 
-from datetime import datetime
 from decimal import Decimal
 from typing import Any, List, Optional
 import uuid
 from pydantic.main import BaseModel
 from pydantic import Field
+
+from app.schemas.base_schema import BASE_AUDIT_RESPONSE_SCHEMA
 
 
 # ── Color ─────────────────────────────────────────────────────────────────────
@@ -27,34 +28,9 @@ class COLOR_UPDATE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class COLOR_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    name             : str
-    hex_code         : Optional[str]      = None
-    status           : str                = "ACTIVE"
-    status_code      : str                = "ACTIVE"
-    created_datetime : Optional[datetime] = None
-    updated_datetime : Optional[datetime] = None
-    created_at       : Optional[datetime] = None
-    updated_at       : Optional[datetime] = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+class COLOR_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    name     : str
+    hex_code : Optional[str] = None
 
 
 # ── Size ──────────────────────────────────────────────────────────────────────
@@ -77,35 +53,10 @@ class SIZE_UPDATE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class SIZE_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    name             : str
-    type             : str
-    sort_order       : int
-    status           : str                = "ACTIVE"
-    status_code      : str                = "ACTIVE"
-    created_datetime : Optional[datetime] = None
-    updated_datetime : Optional[datetime] = None
-    created_at       : Optional[datetime] = None
-    updated_at       : Optional[datetime] = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+class SIZE_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    name       : str
+    type       : str
+    sort_order : int
 
 
 # ── Category ─────────────────────────────────────────────────────────────────
@@ -132,37 +83,12 @@ class CATEGORY_UPDATE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class CATEGORY_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    name             : str
-    slug             : str
-    parent_id        : Optional[uuid.UUID] = None
-    description      : Optional[str]       = None
-    status           : str                 = "ACTIVE"
-    status_code      : str                 = "ACTIVE"
-    sort_order       : int                 = 0
-    created_datetime : Optional[datetime]  = None
-    updated_datetime : Optional[datetime]  = None
-    created_at       : Optional[datetime]  = None
-    updated_at       : Optional[datetime]  = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+class CATEGORY_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    name        : str
+    slug        : str
+    parent_id   : Optional[uuid.UUID] = None
+    description : Optional[str]       = None
+    sort_order  : int                 = 0
 
 
 # ── Brand ─────────────────────────────────────────────────────────────────────
@@ -187,36 +113,11 @@ class BRAND_UPDATE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class BRAND_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    name             : str
-    slug             : str
-    description      : Optional[str]      = None
-    logo_url         : Optional[str]      = None
-    status           : str                = "ACTIVE"
-    status_code      : str                = "ACTIVE"
-    created_datetime : Optional[datetime] = None
-    updated_datetime : Optional[datetime] = None
-    created_at       : Optional[datetime] = None
-    updated_at       : Optional[datetime] = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+class BRAND_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    name        : str
+    slug        : str
+    description : Optional[str] = None
+    logo_url    : Optional[str] = None
 
 
 # ── Supplier ──────────────────────────────────────────────────────────────────
@@ -245,38 +146,13 @@ class SUPPLIER_UPDATE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class SUPPLIER_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    code             : str
-    name             : str
-    phone            : Optional[str]      = None
-    email            : Optional[str]      = None
-    address          : Optional[str]      = None
-    contact_person   : Optional[str]      = None
-    status           : str                = "ACTIVE"
-    status_code      : str                = "ACTIVE"
-    created_datetime : Optional[datetime] = None
-    updated_datetime : Optional[datetime] = None
-    created_at       : Optional[datetime] = None
-    updated_at       : Optional[datetime] = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+class SUPPLIER_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    code           : str
+    name           : str
+    phone          : Optional[str] = None
+    email          : Optional[str] = None
+    address        : Optional[str] = None
+    contact_person : Optional[str] = None
 
 
 # ── Product ───────────────────────────────────────────────────────────────────
@@ -305,43 +181,18 @@ class PRODUCT_UPDATE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class PRODUCT_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    code             : str
-    name             : str
-    slug             : str
-    description      : Optional[str]                      = None
-    category_id      : Optional[uuid.UUID]                = None
-    brand_id         : Optional[uuid.UUID]                = None
-    supplier_id      : Optional[uuid.UUID]                = None
-    status           : str                                = "ACTIVE"
-    status_code      : str                                = "ACTIVE"
-    image_url        : Optional[str]                      = None
-    category         : Optional[CATEGORY_RESPONSE_SCHEMA] = None
-    brand            : Optional[BRAND_RESPONSE_SCHEMA]    = None
-    total_stock      : Optional[int]                      = None
-    created_datetime : Optional[datetime]                 = None
-    updated_datetime : Optional[datetime]                 = None
-    created_at       : Optional[datetime]                 = None
-    updated_at       : Optional[datetime]                 = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+class PRODUCT_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    code        : str
+    name        : str
+    slug        : str
+    description : Optional[str]                      = None
+    category_id : Optional[uuid.UUID]                = None
+    brand_id    : Optional[uuid.UUID]                = None
+    supplier_id : Optional[uuid.UUID]                = None
+    image_url   : Optional[str]                      = None
+    category    : Optional[CATEGORY_RESPONSE_SCHEMA] = None
+    brand       : Optional[BRAND_RESPONSE_SCHEMA]    = None
+    total_stock : Optional[int]                      = None
 
 
 class PAGINATION_METADATA_SCHEMA(BaseModel):
@@ -402,46 +253,21 @@ class PRODUCT_VARIANT_UPDATE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class PRODUCT_VARIANT_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    product_id       : uuid.UUID
-    sku              : str
-    barcode          : Optional[str]                     = None
-    qr_reference     : str
-    color_id         : Optional[uuid.UUID]               = None
-    size_id          : Optional[uuid.UUID]               = None
-    color            : Optional[COLOR_RESPONSE_SCHEMA]   = None
-    size             : Optional[SIZE_RESPONSE_SCHEMA]    = None
-    cost_price       : Decimal
-    selling_price    : Decimal
-    wholesale_price  : Optional[Decimal]                 = None
-    weight_grams     : Optional[int]                     = None
-    status           : str                               = "ACTIVE"
-    status_code      : str                               = "ACTIVE"
-    image_url        : Optional[str]                     = None
-    product          : Optional[PRODUCT_RESPONSE_SCHEMA] = None
-    created_datetime : Optional[datetime]                = None
-    updated_datetime : Optional[datetime]                = None
-    created_at       : Optional[datetime]                = None
-    updated_at       : Optional[datetime]                = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+class PRODUCT_VARIANT_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    product_id      : uuid.UUID
+    sku             : str
+    barcode         : Optional[str]                     = None
+    qr_reference    : str
+    color_id        : Optional[uuid.UUID]               = None
+    size_id         : Optional[uuid.UUID]               = None
+    color           : Optional[COLOR_RESPONSE_SCHEMA]   = None
+    size            : Optional[SIZE_RESPONSE_SCHEMA]    = None
+    cost_price      : Decimal
+    selling_price   : Decimal
+    wholesale_price : Optional[Decimal]                 = None
+    weight_grams    : Optional[int]                     = None
+    image_url       : Optional[str]                     = None
+    product         : Optional[PRODUCT_RESPONSE_SCHEMA] = None
 
 
 class PRODUCT_WITH_VARIANTS_SCHEMA(PRODUCT_RESPONSE_SCHEMA):
@@ -483,4 +309,3 @@ __all__ = [
     "PRODUCT_VARIANT_UPDATE_SCHEMA",
     "PRODUCT_VARIANT_RESPONSE_SCHEMA",
 ]
-

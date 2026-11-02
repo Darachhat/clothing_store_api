@@ -1,13 +1,28 @@
 """Authentication and authorization schemas."""
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 import uuid
 from pydantic.main import BaseModel
-from pydantic import AliasChoices, EmailStr, Field, model_validator
+from pydantic import EmailStr, Field, model_validator
 
-from app.schemas.base_schema import STATS_SUMMARY_SCHEMA
+from app.schemas.base_schema import (
+    BASE_AUDIT_RESPONSE_SCHEMA,
+    BASE_STATUS_UPDATE_SCHEMA,
+    BASE_TIMESTAMP_RESPONSE_SCHEMA,
+    STATS_SUMMARY_SCHEMA,
+)
+
+
+def _normalize_endpoint_dict(data: Any) -> Any:
+    if isinstance(data, dict):
+        out = dict(data)
+        if "endpoint_url" in out and "endpoint" not in out:
+            out["endpoint"] = out["endpoint_url"]
+        elif "endpoint" in out and "endpoint_url" not in out:
+            out["endpoint_url"] = out["endpoint"]
+        return out
+    return data
 
 
 # ── System Client Schemas ─────────────────────────────────────────────────────
@@ -54,19 +69,15 @@ class SYSTEM_UPDATE_SCHEMA(BaseModel):
     status_code       : Optional[str]  = Field(default=None, max_length=10)
 
 
-class SYSTEM_RESPONSE_SCHEMA(BaseModel):
+class SYSTEM_RESPONSE_SCHEMA(BASE_TIMESTAMP_RESPONSE_SCHEMA):
     id                : uuid.UUID
     code              : str
     name              : str
-    description       : Optional[str]      = None
-    base_url          : Optional[str]      = None
+    description       : Optional[str] = None
+    base_url          : Optional[str] = None
     scope             : str
     is_encrypted_body : bool
     status_code       : str
-    created_datetime  : Optional[datetime] = None
-    updated_datetime  : Optional[datetime] = None
-
-    model_config = {"from_attributes": True}
 
 
 class SYSTEM_LIST_OUT_SCHEMA(BaseModel):
@@ -116,7 +127,7 @@ class SYSTEM_CREDENTIAL_CREATE_SCHEMA(BaseModel):
         return self.auth_type_code
 
 
-class SYSTEM_CREDENTIAL_RESPONSE_SCHEMA(BaseModel):
+class SYSTEM_CREDENTIAL_RESPONSE_SCHEMA(BASE_TIMESTAMP_RESPONSE_SCHEMA):
     id                         : uuid.UUID
     system_code                : str
     traffic_type               : str
@@ -127,12 +138,11 @@ class SYSTEM_CREDENTIAL_RESPONSE_SCHEMA(BaseModel):
     generated_secret           : Optional[str]            = None
     header_value               : Optional[str]            = None
     authorization_header_value : Optional[str]            = None
-    created_datetime           : Optional[datetime]       = None
-    updated_datetime           : Optional[datetime]       = None
 
     model_config = {"from_attributes": True, "extra": "allow"}
 
     def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         if not self.auth_type and self.auth_type_code:
             self.auth_type = self.auth_type_code
         elif not self.auth_type_code and self.auth_type:
@@ -150,13 +160,13 @@ class SYSTEM_CREDENTIAL_LIST_OUT_SCHEMA(BaseModel):
 # ── System Endpoint Schemas ───────────────────────────────────────────────────
 
 class SYSTEM_ENDPOINT_CREATE_SCHEMA(BaseModel):
-    code              : str                 = Field(..., max_length=100, examples=["get_user_info"])
-    name              : str                 = Field(..., max_length=255, examples=["Get User Info"])
-    endpoint          : str                 = Field(..., max_length=500, examples=["/api/v1/users"])
-    system_code       : Optional[str]       = None
-    http_method       : str                 = Field(default="GET", max_length=10)
-    operation_type    : Optional[str]       = Field(default=None, max_length=50)
+    system_code       : str                 = Field(..., max_length=100)
+    code              : str                 = Field(..., max_length=100)
+    name              : str                 = Field(..., max_length=255)
+    endpoint          : str                 = Field(..., max_length=500)
+    http_method       : str                 = Field(..., max_length=10, examples=["GET", "POST"])
     traffic_type      : Optional[str]       = Field(default="outbound", max_length=20)
+    operation_type    : Optional[str]       = Field(default=None, max_length=50)
     request_timeout   : Optional[int]       = 30
     auth_type         : Optional[str]       = Field(default=None, max_length=50)
     headers_config    : Optional[Any]       = None
@@ -170,14 +180,7 @@ class SYSTEM_ENDPOINT_CREATE_SCHEMA(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _normalize_endpoint(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            out = dict(data)
-            if "endpoint_url" in out and "endpoint" not in out:
-                out["endpoint"] = out["endpoint_url"]
-            elif "endpoint" in out and "endpoint_url" not in out:
-                out["endpoint_url"] = out["endpoint"]
-            return out
-        return data
+        return _normalize_endpoint_dict(data)
 
     @property
     def endpoint_url(self) -> str:
@@ -204,39 +207,31 @@ class SYSTEM_ENDPOINT_UPDATE_SCHEMA(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _normalize_endpoint(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            out = dict(data)
-            if "endpoint_url" in out and "endpoint" not in out:
-                out["endpoint"] = out["endpoint_url"]
-            elif "endpoint" in out and "endpoint_url" not in out:
-                out["endpoint_url"] = out["endpoint"]
-            return out
-        return data
+        return _normalize_endpoint_dict(data)
 
 
-class SYSTEM_ENDPOINT_RESPONSE_SCHEMA(BaseModel):
+class SYSTEM_ENDPOINT_RESPONSE_SCHEMA(BASE_TIMESTAMP_RESPONSE_SCHEMA):
     id                : uuid.UUID
     system_code       : str
     code              : str
     name              : str
-    endpoint          : Optional[str]      = None
-    endpoint_url      : Optional[str]      = None
+    endpoint          : Optional[str] = None
+    endpoint_url      : Optional[str] = None
     http_method       : str
-    auth_type         : Optional[str]      = None
-    description       : Optional[str]      = None
-    is_encrypted_body : bool               = False
-    traffic_type      : Optional[str]      = None
-    operation_type    : Optional[str]      = None
-    request_timeout   : Optional[int]      = 30
-    headers_config    : Optional[Any]      = None
-    query_config      : Optional[Any]      = None
+    auth_type         : Optional[str] = None
+    description       : Optional[str] = None
+    is_encrypted_body : bool          = False
+    traffic_type      : Optional[str] = None
+    operation_type    : Optional[str] = None
+    request_timeout   : Optional[int] = 30
+    headers_config    : Optional[Any] = None
+    query_config      : Optional[Any] = None
     status_code       : str
-    created_datetime  : Optional[datetime] = None
-    updated_datetime  : Optional[datetime] = None
 
     model_config = {"from_attributes": True, "extra": "allow"}
 
     def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         if not self.endpoint and self.endpoint_url:
             self.endpoint = self.endpoint_url
         elif not self.endpoint_url and self.endpoint:
@@ -287,62 +282,29 @@ class TOKEN_RESPONSE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class PERMISSION_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    code             : str
-    name             : str
-    module           : str
-    status_code      : str                = "ACTIVE"
-    created_datetime : Optional[datetime] = None
-    updated_datetime : Optional[datetime] = None
-
-    model_config = {"from_attributes": True}
+class PERMISSION_RESPONSE_SCHEMA(BASE_TIMESTAMP_RESPONSE_SCHEMA):
+    id          : uuid.UUID
+    code        : str
+    name        : str
+    module      : str
+    status_code : str = "ACTIVE"
 
 
-class ROLE_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    name             : str
-    description      : Optional[str]                         = None
-    status_code      : str                                   = "ACTIVE"
-    permissions      : List[PERMISSION_RESPONSE_SCHEMA]      = []
-    created_datetime : Optional[datetime]                    = None
-    updated_datetime : Optional[datetime]                    = None
-
-    model_config = {"from_attributes": True}
+class ROLE_RESPONSE_SCHEMA(BASE_TIMESTAMP_RESPONSE_SCHEMA):
+    id          : uuid.UUID
+    name        : str
+    description : Optional[str]                    = None
+    status_code : str                              = "ACTIVE"
+    permissions : List[PERMISSION_RESPONSE_SCHEMA] = []
 
 
-class USER_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    username         : str
-    email            : str
-    full_name        : str
-    employee_code    : Optional[str]              = None
-    branch_id        : Optional[uuid.UUID]        = None
-    status           : str                        = "ACTIVE"
-    status_code      : str                        = "ACTIVE"
-    roles            : List[ROLE_RESPONSE_SCHEMA] = []
-    created_datetime : Optional[datetime]         = None
-    updated_datetime : Optional[datetime]         = None
-    created_at       : Optional[datetime]         = None
-    updated_at       : Optional[datetime]         = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+class USER_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    username      : str
+    email         : str
+    full_name     : str
+    employee_code : Optional[str]              = None
+    branch_id     : Optional[uuid.UUID]        = None
+    roles         : List[ROLE_RESPONSE_SCHEMA] = []
 
 
 class LOGIN_RESPONSE_SCHEMA(TOKEN_RESPONSE_SCHEMA):
@@ -362,23 +324,13 @@ class USER_CREATE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class USER_UPDATE_SCHEMA(BaseModel):
+class USER_UPDATE_SCHEMA(BASE_STATUS_UPDATE_SCHEMA):
     full_name     : Optional[str]             = None
     email         : Optional[EmailStr]        = None
     employee_code : Optional[str]             = None
     branch_id     : Optional[uuid.UUID]       = None
-    status        : Optional[str]             = None
-    status_code   : Optional[str]             = None
     password      : Optional[str]             = Field(default=None, min_length=8)
     role_ids      : Optional[List[uuid.UUID]] = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
 
 
 class ROLE_CREATE_SCHEMA(BaseModel):

@@ -1,46 +1,22 @@
 """Inventory schemas."""
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, List, Optional
 import uuid
 from pydantic.main import BaseModel
 from pydantic import Field, model_validator
 
+from app.schemas.base_schema import BASE_AUDIT_RESPONSE_SCHEMA
 
-class INVENTORY_STOCK_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    variant_id       : uuid.UUID
-    warehouse_id     : uuid.UUID
-    quantity         : int
-    reorder_level    : int
-    sku              : Optional[str]      = None
-    variant          : Optional[Any]      = None
-    warehouse        : Optional[Any]      = None
-    status           : str                = "ACTIVE"
-    status_code      : str                = "ACTIVE"
-    created_datetime : Optional[datetime] = None
-    updated_datetime : Optional[datetime] = None
-    created_at       : Optional[datetime] = None
-    updated_at       : Optional[datetime] = None
 
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+class INVENTORY_STOCK_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    variant_id    : uuid.UUID
+    warehouse_id  : uuid.UUID
+    quantity      : int
+    reorder_level : int
+    sku           : Optional[str] = None
+    variant       : Optional[Any] = None
+    warehouse     : Optional[Any] = None
 
     @model_validator(mode="after")
     def populate_sku(self) -> "INVENTORY_STOCK_RESPONSE_SCHEMA":
@@ -67,42 +43,17 @@ class INVENTORY_STOCK_RESPONSE_SCHEMA(BaseModel):
         return self
 
 
-class INVENTORY_MOVEMENT_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    variant_id       : uuid.UUID
-    warehouse_id     : uuid.UUID
-    movement_type    : str
-    quantity         : int
-    before_quantity  : int
-    after_quantity   : int
-    reference_type   : Optional[str]       = None
-    reference_id     : Optional[uuid.UUID] = None
-    note             : Optional[str]       = None
-    created_by       : Optional[Any]       = None
-    status           : str                 = "ACTIVE"
-    status_code      : str                 = "ACTIVE"
-    created_datetime : Optional[datetime]  = None
-    updated_datetime : Optional[datetime]  = None
-    created_at       : Optional[datetime]  = None
-    updated_at       : Optional[datetime]  = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+class INVENTORY_MOVEMENT_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    variant_id      : uuid.UUID
+    warehouse_id    : uuid.UUID
+    movement_type   : str
+    quantity        : int
+    before_quantity : int
+    after_quantity  : int
+    reference_type  : Optional[str]       = None
+    reference_id    : Optional[uuid.UUID] = None
+    note            : Optional[str]       = None
+    created_by      : Optional[Any]       = None
 
 
 class STOCK_ADJUSTMENT_CREATE_SCHEMA(BaseModel):
@@ -148,73 +99,25 @@ class STOCK_TRANSFER_CREATE_SCHEMA(BaseModel):
     notes             : Optional[str]                          = None
 
 
-class STOCK_TRANSFER_ITEM_RESPONSE_SCHEMA(BaseModel):
-    id                 : uuid.UUID
+class STOCK_TRANSFER_ITEM_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
     transfer_id        : uuid.UUID
     variant_id         : uuid.UUID
     quantity_requested : int
     quantity_sent      : int
     quantity_received  : int
-    notes              : Optional[str]      = None
-    status             : str                = "ACTIVE"
-    status_code        : str                = "ACTIVE"
-    created_datetime   : Optional[datetime] = None
-    updated_datetime   : Optional[datetime] = None
-    created_at         : Optional[datetime] = None
-    updated_at         : Optional[datetime] = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+    notes              : Optional[str] = None
 
 
-class STOCK_TRANSFER_RESPONSE_SCHEMA(BaseModel):
-    id                : uuid.UUID
+class STOCK_TRANSFER_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
     transfer_number   : str
     from_warehouse_id : uuid.UUID
     to_warehouse_id   : uuid.UUID
-    status            : str                                        = "PENDING"
-    status_code       : str                                        = "PENDING"
-    notes             : Optional[str]                              = None
-    created_by        : Optional[Any]                              = None
-    approved_by       : Optional[Any]                              = None
-    items             : List[STOCK_TRANSFER_ITEM_RESPONSE_SCHEMA]  = []
-    created_datetime  : Optional[datetime]                         = None
-    updated_datetime  : Optional[datetime]                         = None
-    created_at        : Optional[datetime]                         = None
-    updated_at        : Optional[datetime]                         = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
+    status            : str                                       = "PENDING"
+    status_code       : str                                       = "PENDING"
+    notes             : Optional[str]                             = None
+    created_by        : Optional[Any]                             = None
+    approved_by       : Optional[Any]                             = None
+    items             : List[STOCK_TRANSFER_ITEM_RESPONSE_SCHEMA] = []
 
 
 STOCK_ADJUSTMENT_REQUEST_SCHEMA = STOCK_ADJUSTMENT_CREATE_SCHEMA
@@ -240,4 +143,3 @@ __all__ = [
     "STOCK_TRANSFER_ITEM_RESPONSE_SCHEMA",
     "STOCK_TRANSFER_RESPONSE_SCHEMA",
 ]
-

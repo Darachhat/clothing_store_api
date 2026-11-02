@@ -8,6 +8,12 @@ import uuid
 from pydantic.main import BaseModel
 from pydantic import Field, model_validator
 
+from app.schemas.base_schema import (
+    BASE_AUDIT_RESPONSE_SCHEMA,
+    BASE_STATUS_SYNC_SCHEMA,
+    BASE_STATUS_UPDATE_SCHEMA,
+)
+
 
 def _normalize_promo_payload(data: Any) -> Any:
     if not isinstance(data, dict):
@@ -29,7 +35,7 @@ def _normalize_promo_payload(data: Any) -> Any:
     return out
 
 
-class PROMOTION_CREATE_SCHEMA(BaseModel):
+class PROMOTION_CREATE_SCHEMA(BASE_STATUS_SYNC_SCHEMA):
     name                : str
     type                : str  # PERCENTAGE | FIXED | COUPON | CATEGORY | PRODUCT
     value               : Decimal             = Field(gt=0)
@@ -51,14 +57,8 @@ class PROMOTION_CREATE_SCHEMA(BaseModel):
     def normalize_create(cls, data: Any) -> Any:
         return _normalize_promo_payload(data)
 
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
 
-
-class PROMOTION_UPDATE_SCHEMA(BaseModel):
+class PROMOTION_UPDATE_SCHEMA(BASE_STATUS_UPDATE_SCHEMA):
     name                : Optional[str]       = None
     type                : Optional[str]       = None
     value               : Optional[Decimal]   = Field(default=None, gt=0)
@@ -70,25 +70,14 @@ class PROMOTION_UPDATE_SCHEMA(BaseModel):
     category_id         : Optional[uuid.UUID] = None
     start_datetime      : Optional[datetime]  = None
     end_datetime        : Optional[datetime]  = None
-    status              : Optional[str]       = None
-    status_code         : Optional[str]       = None
-
-    model_config = {"from_attributes": True}
 
     @model_validator(mode="before")
     @classmethod
     def normalize_update(cls, data: Any) -> Any:
         return _normalize_promo_payload(data)
 
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
 
-
-class PROMOTION_RESPONSE_SCHEMA(BaseModel):
-    id                  : uuid.UUID
+class PROMOTION_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
     name                : str
     type                : str
     value               : Decimal
@@ -101,30 +90,6 @@ class PROMOTION_RESPONSE_SCHEMA(BaseModel):
     category_id         : Optional[uuid.UUID] = None
     start_datetime      : datetime
     end_datetime        : datetime
-    status              : str                 = "ACTIVE"
-    status_code         : str                 = "ACTIVE"
-    created_datetime    : Optional[datetime]  = None
-    updated_datetime    : Optional[datetime]  = None
-    created_at          : Optional[datetime]  = None
-    updated_at          : Optional[datetime]  = None
-
-    model_config = {"from_attributes": True}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
-
-        if self.created_datetime and not self.created_at:
-            self.created_at = self.created_datetime
-        elif self.created_at and not self.created_datetime:
-            self.created_datetime = self.created_at
-
-        if self.updated_datetime and not self.updated_at:
-            self.updated_at = self.updated_datetime
-        elif self.updated_at and not self.updated_datetime:
-            self.updated_datetime = self.updated_at
 
 
 class COUPON_VALIDATION_REQUEST_SCHEMA(BaseModel):
@@ -156,4 +121,3 @@ __all__ = [
     "COUPON_VALIDATION_RESPONSE_SCHEMA",
     "PROMOTION_LIST_OUT_SCHEMA",
 ]
-

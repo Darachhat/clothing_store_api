@@ -16,13 +16,30 @@ class BASE_SCHEMA(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class TIMESTAMP_SCHEMA(BASE_SCHEMA):
+class BASE_STATUS_SYNC_SCHEMA(BASE_SCHEMA):
+    def model_post_init(self, __context: Any) -> None:
+        if hasattr(self, "status_code") and hasattr(self, "status"):
+            sc = getattr(self, "status_code", None)
+            st = getattr(self, "status", None)
+            if sc and not st:
+                self.status = sc
+            elif st and not sc:
+                self.status_code = st
+
+
+class BASE_STATUS_UPDATE_SCHEMA(BASE_STATUS_SYNC_SCHEMA):
+    status      : Optional[str] = None
+    status_code : Optional[str] = None
+
+
+class BASE_TIMESTAMP_RESPONSE_SCHEMA(BASE_STATUS_SYNC_SCHEMA):
     created_datetime : Optional[datetime] = None
     updated_datetime : Optional[datetime] = None
     created_at       : Optional[datetime] = None
     updated_at       : Optional[datetime] = None
 
     def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
         if self.created_datetime and not self.created_at:
             self.created_at = self.created_datetime
         elif self.created_at and not self.created_datetime:
@@ -34,8 +51,16 @@ class TIMESTAMP_SCHEMA(BASE_SCHEMA):
             self.updated_datetime = self.updated_at
 
 
-class UUID_SCHEMA(TIMESTAMP_SCHEMA):
-    id : uuid.UUID
+TIMESTAMP_SCHEMA = BASE_TIMESTAMP_RESPONSE_SCHEMA
+
+
+class BASE_AUDIT_RESPONSE_SCHEMA(BASE_TIMESTAMP_RESPONSE_SCHEMA):
+    id          : uuid.UUID
+    status_code : str = "ACTIVE"
+    status      : str = "ACTIVE"
+
+
+UUID_SCHEMA = BASE_AUDIT_RESPONSE_SCHEMA
 
 
 class PAGINATED_RESPONSE_SCHEMA(BASE_SCHEMA):
@@ -128,6 +153,10 @@ __all__ = [
     "BASE_SCHEMA",
     "TIMESTAMP_SCHEMA",
     "UUID_SCHEMA",
+    "BASE_STATUS_SYNC_SCHEMA",
+    "BASE_STATUS_UPDATE_SCHEMA",
+    "BASE_TIMESTAMP_RESPONSE_SCHEMA",
+    "BASE_AUDIT_RESPONSE_SCHEMA",
     "PAGINATED_RESPONSE_SCHEMA",
     "MESSAGE_RESPONSE_SCHEMA",
     "STATS_SUMMARY_SCHEMA",

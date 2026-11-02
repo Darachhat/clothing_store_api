@@ -1,11 +1,12 @@
 """Payment schemas following system_log_schema.py template."""
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 import uuid
 from pydantic.main import BaseModel
-from pydantic import Field, model_validator
+from pydantic import Field
+
+from app.schemas.base_schema import BASE_AUDIT_RESPONSE_SCHEMA
 
 
 class PAYMENT_KHQR_CREATE_REQUEST_SCHEMA(BaseModel):
@@ -32,30 +33,21 @@ class PAYMENT_PURCHASE_FORM_RESPONSE_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class PAYMENT_TRANSACTION_RESPONSE_SCHEMA(BaseModel):
-    id               : uuid.UUID
-    tran_id          : str
-    sale_id          : Optional[uuid.UUID]      = None
-    status           : str                      = "PENDING"
-    status_code      : str                      = "PENDING"
-    amount           : float
-    currency         : str                      = "USD"
-    qr_string        : Optional[str]            = None
-    qr_image         : Optional[str]            = None
-    checkout_url     : Optional[str]            = None
-    apv              : Optional[str]            = None
-    expires_at       : Optional[Any]            = None
-    paid_at          : Optional[Any]            = None
-    created_datetime : Optional[datetime]       = None
-    updated_datetime : Optional[datetime]       = None
+class PAYMENT_TRANSACTION_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
+    tran_id      : str
+    sale_id      : Optional[uuid.UUID] = None
+    status       : str                 = "PENDING"
+    status_code  : str                 = "PENDING"
+    amount       : float
+    currency     : str                 = "USD"
+    qr_string    : Optional[str]       = None
+    qr_image     : Optional[str]       = None
+    checkout_url : Optional[str]       = None
+    apv          : Optional[str]       = None
+    expires_at   : Optional[Any]       = None
+    paid_at      : Optional[Any]       = None
 
     model_config = {"from_attributes": True, "extra": "allow"}
-
-    def model_post_init(self, __context: Any) -> None:
-        if not self.status and self.status_code:
-            self.status = self.status_code
-        elif not self.status_code and self.status:
-            self.status_code = self.status
 
 
 class PAYMENT_TRANSACTION_LIST_OUT_SCHEMA(BaseModel):
@@ -72,4 +64,3 @@ __all__ = [
     "PAYMENT_TRANSACTION_RESPONSE_SCHEMA",
     "PAYMENT_TRANSACTION_LIST_OUT_SCHEMA",
 ]
-
