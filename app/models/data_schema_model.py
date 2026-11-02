@@ -293,10 +293,14 @@ class INVENTORY_MOVEMENT_MODEL(BASE_MODEL):
     reference_type              : Mapped[Optional[str]]             = mapped_column(String(50), nullable=True)
     reference_id                : Mapped[Optional[uuid.UUID]]       = mapped_column(UUID(as_uuid=True), nullable=True)
     note                        : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+    created_by                  : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL"), nullable=True
+    )
     status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
     variant                     : Mapped[PRODUCT_VARIANT_MODEL]     = relationship("PRODUCT_VARIANT_MODEL")
     warehouse                   : Mapped[WAREHOUSE_MODEL]           = relationship("WAREHOUSE_MODEL")
+    creator                     : Mapped[Optional[USER_MODEL]]      = relationship("USER_MODEL")
 
 
 # ── STOCK_TRANSFER_MODEL ──────────────────────────────────────────────────────

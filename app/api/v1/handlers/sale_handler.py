@@ -42,6 +42,7 @@ def _sale_eager_options():
     )
 
 
+@router.get("", response_model=list[SALE_RESPONSE_SCHEMA], include_in_schema=False)
 @router.get("/", response_model=list[SALE_RESPONSE_SCHEMA])
 async def list_sales(
     skip: int = 0,
@@ -59,6 +60,7 @@ async def list_sales(
     return list(result.scalars().all())
 
 
+@router.post("", response_model=SALE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @router.post("/", response_model=SALE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_sale(
     body: SALE_CREATE_SCHEMA,
@@ -240,6 +242,7 @@ async def cancel_sale(
 returns_router = APIRouter(prefix="/returns", tags=["Returns"])
 
 
+@returns_router.get("", response_model=list[RETURN_RESPONSE_SCHEMA], include_in_schema=False)
 @returns_router.get("/", response_model=list[RETURN_RESPONSE_SCHEMA])
 async def list_returns(
     skip: int = 0,
@@ -253,6 +256,7 @@ async def list_returns(
     return list(result.scalars().all())
 
 
+@returns_router.post("", response_model=RETURN_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @returns_router.post("/", response_model=RETURN_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_return(
     body: RETURN_CREATE_SCHEMA,

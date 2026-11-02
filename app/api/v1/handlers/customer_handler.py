@@ -22,6 +22,7 @@ from app.services.customer_service import CUSTOMER_SERVICE
 router = APIRouter(prefix="/customers", tags=["Customers & Loyalty"])
 
 
+@router.get("", response_model=CUSTOMER_LIST_OUT_SCHEMA, include_in_schema=False)
 @router.get("/", response_model=CUSTOMER_LIST_OUT_SCHEMA)
 async def list_customers(
     q: str | None = Query(None, description="Search query"),
@@ -41,6 +42,7 @@ async def list_customers(
     )
 
 
+@router.post("", response_model=CUSTOMER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @router.post("/", response_model=CUSTOMER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_customer(
     data: CUSTOMER_CREATE_SCHEMA,

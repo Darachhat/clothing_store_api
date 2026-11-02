@@ -44,6 +44,7 @@ suppliers_router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
 
 
 # ─── Categories ───────────────────────────────────────────────────────────────
+@categories_router.get("", response_model=list[CATEGORY_RESPONSE_SCHEMA], include_in_schema=False)
 @categories_router.get("/", response_model=list[CATEGORY_RESPONSE_SCHEMA])
 async def list_categories(
     skip: int = Query(0, ge=0),
@@ -55,6 +56,7 @@ async def list_categories(
     return await repo.get_all(skip=skip, limit=limit)
 
 
+@categories_router.post("", response_model=CATEGORY_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @categories_router.post("/", response_model=CATEGORY_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_category(
     body: CATEGORY_CREATE_SCHEMA,
@@ -122,6 +124,7 @@ async def delete_category(
 
 
 # ─── Colors ───────────────────────────────────────────────────────────────────
+@colors_router.get("", response_model=list[COLOR_RESPONSE_SCHEMA], include_in_schema=False)
 @colors_router.get("/", response_model=list[COLOR_RESPONSE_SCHEMA])
 async def list_colors(
     skip: int = Query(0, ge=0),
@@ -133,6 +136,7 @@ async def list_colors(
     return await repo.get_all(skip=skip, limit=limit)
 
 
+@colors_router.post("", response_model=COLOR_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @colors_router.post("/", response_model=COLOR_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_color(
     body: COLOR_CREATE_SCHEMA,
@@ -194,6 +198,7 @@ async def delete_color(
 
 
 # ─── Sizes ────────────────────────────────────────────────────────────────────
+@sizes_router.get("", response_model=list[SIZE_RESPONSE_SCHEMA], include_in_schema=False)
 @sizes_router.get("/", response_model=list[SIZE_RESPONSE_SCHEMA])
 async def list_sizes(
     skip: int = Query(0, ge=0),
@@ -205,6 +210,7 @@ async def list_sizes(
     return await repo.get_all(skip=skip, limit=limit)
 
 
+@sizes_router.post("", response_model=SIZE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @sizes_router.post("/", response_model=SIZE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_size(
     body: SIZE_CREATE_SCHEMA,
@@ -266,6 +272,7 @@ async def delete_size(
 
 
 # ─── Brands ───────────────────────────────────────────────────────────────────
+@brands_router.get("", response_model=list[BRAND_RESPONSE_SCHEMA], include_in_schema=False)
 @brands_router.get("/", response_model=list[BRAND_RESPONSE_SCHEMA])
 async def list_brands(
     skip: int = Query(0, ge=0),
@@ -277,6 +284,7 @@ async def list_brands(
     return await repo.get_all(skip=skip, limit=limit)
 
 
+@brands_router.post("", response_model=BRAND_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @brands_router.post("/", response_model=BRAND_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_brand(
     body: BRAND_CREATE_SCHEMA,
@@ -344,6 +352,7 @@ async def delete_brand(
 
 
 # ─── Suppliers ────────────────────────────────────────────────────────────────
+@suppliers_router.get("", response_model=list[SUPPLIER_RESPONSE_SCHEMA], include_in_schema=False)
 @suppliers_router.get("/", response_model=list[SUPPLIER_RESPONSE_SCHEMA])
 async def list_suppliers(
     skip: int = Query(0, ge=0),
@@ -355,6 +364,7 @@ async def list_suppliers(
     return await repo.get_all(skip=skip, limit=limit)
 
 
+@suppliers_router.post("", response_model=SUPPLIER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @suppliers_router.post("/", response_model=SUPPLIER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_supplier(
     body: SUPPLIER_CREATE_SCHEMA,
