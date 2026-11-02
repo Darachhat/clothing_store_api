@@ -104,7 +104,7 @@ async def generate_labels(
         brand_or_store = (
             body.store_name_override.strip()
             if body.store_name_override and body.store_name_override.strip()
-            else "ហាងលក់សម្លៀកបំពាក់ ភ្នំពេញ"
+            else "គឹម វណ្ណាក់ ហាងលក់សម្លៀកបំពាក់ "
         )
 
         label = LabelData(

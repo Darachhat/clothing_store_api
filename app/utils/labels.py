@@ -18,7 +18,7 @@ from reportlab.pdfgen import canvas
 from app.utils.qr import generate_barcode_png, generate_qr_png
 
 KHR_EXCHANGE_RATE = 4100
-KHMER_STORE_HEADER = "ហាងលក់សម្លៀកបំពាក់ ភ្នំពេញ"
+KHMER_STORE_HEADER = "គឹម វណ្ណាក់ ហាងលក់សម្លៀកបំពាក់ "
 
 _KHMER_FONT_REGISTERED = False
 _KHMER_FONT_REGULAR = "Helvetica"
@@ -105,7 +105,7 @@ def _draw_single_sticker(
         c.setLineWidth(0.4)
         c.roundRect(x, y, label_w, label_h, radius=1.2 * mm, stroke=1, fill=0)
 
-    # 1. Top Store Header: ហាងលក់សម្លៀកបំពាក់ ភ្នំពេញ
+    # 1. Top Store Header: គឹម វណ្ណាក់ ហាងលក់សម្លៀកបំពាក់ 
     store_fs = 6.5 if is_large else (5.0 if is_compact else 5.5)
     top_y = y + label_h - pad_y - store_fs
     store_title = label.brand_name.strip() if label.brand_name and label.brand_name != "Clothing Store" else KHMER_STORE_HEADER
