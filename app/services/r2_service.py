@@ -11,9 +11,17 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-import boto3
-from botocore.client import Config
-from botocore.exceptions import ClientError
+try:
+    import boto3
+    from botocore.client import Config
+    from botocore.exceptions import ClientError
+    BOTO3_AVAILABLE = True
+except ImportError:
+    boto3 = None  # type: ignore[assignment]
+    Config = None  # type: ignore[assignment]
+    ClientError = Exception  # type: ignore[assignment, misc]
+    BOTO3_AVAILABLE = False
+
 from fastapi import HTTPException, UploadFile, status
 from loguru import logger
 
@@ -55,7 +63,7 @@ class R2_STORAGE_SERVICE:
 
     @property
     def _is_configured(self) -> bool:
-        return bool(self.access_key_id and self.secret_access_key)
+        return bool(BOTO3_AVAILABLE and self.access_key_id and self.secret_access_key)
 
     @classmethod
     def is_configured(cls) -> bool:
@@ -67,6 +75,12 @@ class R2_STORAGE_SERVICE:
 
     @property
     def client(self) -> Optional[Any]:
+        if not BOTO3_AVAILABLE:
+            if not self._logged_no_cred:
+                logger.warning("boto3 is not installed in the current environment. Running storage in local disk fallback mode.")
+                self._logged_no_cred = True
+            return None
+
         if not self._is_configured:
             if not self._logged_no_cred:
                 logger.info("Cloudflare R2 credentials (R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY) not provided. Running in local fallback mode.")
