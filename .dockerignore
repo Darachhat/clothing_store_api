@@ -12,5 +12,4 @@ htmlcov/
 logs/
 tests/
 celerybeat-schedule*
-uploads/
 
