@@ -23,6 +23,12 @@ def upgrade() -> None:
             key VARCHAR(100) NOT NULL,
             value JSONB NOT NULL DEFAULT '{}'::jsonb,
             description VARCHAR(255),
+            created_datetime TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_datetime TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            deleted_datetime TIMESTAMPTZ,
+            created_by VARCHAR(100),
+            updated_by VARCHAR(100),
+            deleted_by VARCHAR(100),
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             CONSTRAINT uq_setting_category_key UNIQUE (category, key)
