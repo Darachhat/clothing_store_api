@@ -159,21 +159,25 @@ class PAYMENT_SERVICE:
 
         safe_resp = {k: v for k, v in aba_resp.items() if k not in ("hash",)}
 
+        user_uuid: Optional[UUID] = created_by if isinstance(created_by, UUID) else (UUID(str(created_by)) if created_by else None)
+        user_str: Optional[str] = str(created_by) if created_by else None
+
         tx = PaymentTransaction(
-            provider        = PAYMENT_PROVIDER_ENUM.ABA_PAYWAY.value
-            , tran_id        = tran_id
-            , sale_id        = sale_id
-            , channel        = PAYMENT_CHANNEL_ENUM.POS.value
-            , payment_option = "abapay_khqr"
-            , amount         = amount
-            , currency       = CURRENCY_ENUM.USD.value
-            , status         = PAYMENT_STATUS_ENUM.PENDING.value
-            , qr_string      = qr_string
-            , checkout_url   = deeplink
-            , expires_at     = datetime.now(timezone.utc)
+            provider            = PAYMENT_PROVIDER_ENUM.ABA_PAYWAY.value
+            , tran_id           = tran_id
+            , sale_id           = sale_id
+            , channel           = PAYMENT_CHANNEL_ENUM.POS.value
+            , payment_option    = "abapay_khqr"
+            , amount            = amount
+            , currency          = CURRENCY_ENUM.USD.value
+            , status            = PAYMENT_STATUS_ENUM.PENDING.value
+            , qr_string         = qr_string
+            , checkout_url      = deeplink
+            , expires_at        = datetime.now(timezone.utc)
             + timedelta(minutes=settings.PAYWAY_QR_LIFETIME_MINUTES)
-            , last_response  = safe_resp
-            , created_by     = created_by
+            , last_response     = safe_resp
+            , created_by        = user_str
+            , created_by_user_id = user_uuid
         )
         self.db.add(tx)
         await self.db.flush()
@@ -226,21 +230,25 @@ class PAYMENT_SERVICE:
 
         safe_form = {k: v for k, v in form_data.items() if k not in ("hash",)}
 
+        user_uuid: Optional[UUID] = created_by if isinstance(created_by, UUID) else (UUID(str(created_by)) if created_by else None)
+        user_str: Optional[str] = str(created_by) if created_by else None
+
         tx = PaymentTransaction(
-            provider        = PAYMENT_PROVIDER_ENUM.ABA_PAYWAY.value
-            , tran_id        = tran_id
-            , sale_id        = sale_id
-            , channel        = f"{PAYMENT_CHANNEL_ENUM.POS.value}_MODAL"
-            , payment_option = payment_option or "all"
-            , amount         = amount
-            , currency       = CURRENCY_ENUM.USD.value
-            , status         = PAYMENT_STATUS_ENUM.PENDING.value
-            , qr_string      = None
-            , checkout_url   = action_url
-            , expires_at     = datetime.now(timezone.utc)
+            provider            = PAYMENT_PROVIDER_ENUM.ABA_PAYWAY.value
+            , tran_id           = tran_id
+            , sale_id           = sale_id
+            , channel           = f"{PAYMENT_CHANNEL_ENUM.POS.value}_MODAL"
+            , payment_option    = payment_option or "all"
+            , amount            = amount
+            , currency          = CURRENCY_ENUM.USD.value
+            , status            = PAYMENT_STATUS_ENUM.PENDING.value
+            , qr_string         = None
+            , checkout_url      = action_url
+            , expires_at        = datetime.now(timezone.utc)
             + timedelta(minutes=settings.PAYWAY_QR_LIFETIME_MINUTES)
-            , last_response  = {"form_data": safe_form}
-            , created_by     = created_by
+            , last_response     = {"form_data": safe_form}
+            , created_by        = user_str
+            , created_by_user_id = user_uuid
         )
         self.db.add(tx)
         await self.db.flush()
@@ -407,14 +415,4 @@ class PAYMENT_SERVICE:
         )
 
 
-    async def create_purchase_payload(
-        self
-        , payload    : PAYMENT_PURCHASE_FORM_REQUEST_SCHEMA
-        , created_by : UUID
-    ) -> Tuple[str, Dict[str, str], PaymentTransaction]:
-        """Create ABA purchase form using structured PAYMENT_PURCHASE_FORM_REQUEST_SCHEMA."""
-        return await self.create_purchase_for_sale(
-            sale_id        = payload.sale_id
-            , payment_option = payload.payment_option
-            , created_by     = created_by
-        )
+
