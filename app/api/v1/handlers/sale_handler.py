@@ -91,6 +91,7 @@ async def create_sale(
         notes=body.notes,
         promotion_id=body.promotion_id,
         terminal_id=body.terminal_id,
+        shift_id=body.shift_id,
         payments=payments_data,
         background_tasks=background_tasks,
     )

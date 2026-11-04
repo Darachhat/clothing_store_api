@@ -5,7 +5,7 @@ Schema: data
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
@@ -171,6 +171,7 @@ class POS_TERMINAL_MODEL(BASE_MODEL):
     branch                      : Mapped[BRANCH_MODEL]              = relationship("BRANCH_MODEL")
     warehouse                   : Mapped[WAREHOUSE_MODEL]           = relationship("WAREHOUSE_MODEL")
     sales                       : Mapped[list[SALE_MODEL]]          = relationship("SALE_MODEL", back_populates="terminal")
+    shifts                      : Mapped[list[POS_SHIFT_MODEL]]     = relationship("POS_SHIFT_MODEL", back_populates="terminal")
 
     @property
     def branch_name(self) -> str | None:
@@ -181,6 +182,53 @@ class POS_TERMINAL_MODEL(BASE_MODEL):
     def warehouse_name(self) -> str | None:
         wh = self.__dict__.get("warehouse")
         return getattr(wh, "name", None) if wh is not None else None
+
+
+# ── POS_SHIFT_MODEL ───────────────────────────────────────────────────────────
+class POS_SHIFT_MODEL(BASE_MODEL):
+    __tablename__               = "pos_shifts"
+    __table_args__              = {"schema": "data"}
+
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    terminal_id                 : Mapped[uuid.UUID]                 = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.pos_terminals.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    branch_id                   : Mapped[uuid.UUID]                 = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.branches.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    cashier_id                  : Mapped[uuid.UUID]                 = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    opened_at                   : Mapped[datetime]                  = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    closed_at                   : Mapped[Optional[datetime]]        = mapped_column(DateTime(timezone=True), nullable=True)
+    opening_float_usd           : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
+    opening_float_khr           : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
+    closing_cash_usd            : Mapped[Optional[Decimal]]         = mapped_column(Numeric(12, 2), nullable=True)
+    closing_cash_khr            : Mapped[Optional[Decimal]]         = mapped_column(Numeric(12, 2), nullable=True)
+    expected_cash_usd           : Mapped[Optional[Decimal]]         = mapped_column(Numeric(12, 2), nullable=True)
+    expected_cash_khr           : Mapped[Optional[Decimal]]         = mapped_column(Numeric(12, 2), nullable=True)
+    status_code                 : Mapped[str]                       = mapped_column(String(20), default="OPEN", nullable=False, index=True)
+    notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
+
+    terminal                    : Mapped[POS_TERMINAL_MODEL]        = relationship("POS_TERMINAL_MODEL", back_populates="shifts")
+    branch                      : Mapped[BRANCH_MODEL]              = relationship("BRANCH_MODEL")
+    cashier                     : Mapped[USER_MODEL]                = relationship("USER_MODEL")
+    sales                       : Mapped[list[SALE_MODEL]]          = relationship("SALE_MODEL", back_populates="shift")
+
+    @property
+    def terminal_code(self) -> str | None:
+        term = self.__dict__.get("terminal")
+        return getattr(term, "code", None) if term is not None else None
+
+    @property
+    def cashier_name(self) -> str | None:
+        usr = self.__dict__.get("cashier")
+        return getattr(usr, "full_name", None) or getattr(usr, "username", None) if usr is not None else None
+
+    @property
+    def branch_name(self) -> str | None:
+        br = self.__dict__.get("branch")
+        return getattr(br, "name", None) if br is not None else None
 
 
 # ── SUPPLIER_MODEL ────────────────────────────────────────────────────────────
@@ -537,6 +585,9 @@ class SALE_MODEL(BASE_MODEL):
     terminal_id                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.pos_terminals.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    shift_id                    : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.pos_shifts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
     customer                    : Mapped[Optional[CUSTOMER_MODEL]]  = relationship("CUSTOMER_MODEL", back_populates="sales")
@@ -545,6 +596,7 @@ class SALE_MODEL(BASE_MODEL):
     cashier                     : Mapped[USER_MODEL]                = relationship("USER_MODEL")
     promotion                   : Mapped[Optional[PROMOTION_MODEL]] = relationship("PROMOTION_MODEL")
     terminal                    : Mapped[Optional[POS_TERMINAL_MODEL]] = relationship("POS_TERMINAL_MODEL", back_populates="sales")
+    shift                       : Mapped[Optional[POS_SHIFT_MODEL]] = relationship("POS_SHIFT_MODEL", back_populates="sales")
     items                       : Mapped[list[SALE_ITEM_MODEL]]     = relationship(
         "SALE_ITEM_MODEL", back_populates="sale", cascade="all, delete-orphan", lazy="selectin"
     )

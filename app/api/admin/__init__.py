@@ -27,6 +27,8 @@ from app.api.v1.endpoints.promotions import router as promotions_router
 from app.api.v1.endpoints.purchases import router as purchases_router
 from app.api.v1.endpoints.reports import router as reports_router
 from app.api.v1.endpoints.sales import returns_router, router as sales_router
+from app.api.v1.endpoints.settings import router as settings_router
+from app.api.v1.endpoints.shifts import router as shifts_router
 from app.api.v1.endpoints.terminals import router as terminals_router
 from app.api.v1.endpoints.users import roles_router, users_router
 from app.api.v1.handlers.audit_handler import router as audit_router
@@ -65,6 +67,8 @@ _protected.include_router(roles_router)
 _protected.include_router(branches_router)
 _protected.include_router(warehouses_router)
 _protected.include_router(terminals_router)
+_protected.include_router(shifts_router)
+_protected.include_router(settings_router)
 _protected.include_router(attachments_router)
 _protected.include_router(uploads_router)
 _protected.include_router(audit_router)

@@ -15,8 +15,9 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -236,3 +237,18 @@ class LABEL_TEMPLATE_MODEL(BASE_MODEL):
     template_html               : Mapped[str]                       = mapped_column(Text, nullable=False)
     is_default                  : Mapped[bool]                      = mapped_column(Boolean, default=False, nullable=False)
     status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
+
+
+# ── SYSTEM_SETTING_MODEL ──────────────────────────────────────────────────────
+class SYSTEM_SETTING_MODEL(BASE_MODEL):
+    __tablename__               = "system_settings"
+    __table_args__              = (
+        UniqueConstraint("category", "key", name="uq_setting_category_key"),
+        {"schema": "base_data"},
+    )
+
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    category                    : Mapped[str]                       = mapped_column(String(50), nullable=False, index=True)
+    key                         : Mapped[str]                       = mapped_column(String(100), nullable=False)
+    value                       : Mapped[dict]                      = mapped_column(JSONB, nullable=False, default=dict)
+    description                 : Mapped[Optional[str]]             = mapped_column(String(255), nullable=True)

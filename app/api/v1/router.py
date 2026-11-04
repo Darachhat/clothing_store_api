@@ -10,6 +10,8 @@ from app.api.v1.handlers.product_handler import router as products_router, varia
 from app.api.v1.handlers.attachment_handler import router as attachments_router, uploads_router
 from app.api.v1.handlers.branch_handler import router as branches_router, warehouses_router
 from app.api.v1.handlers.terminal_handler import router as terminals_router
+from app.api.v1.handlers.shift_handler import router as shifts_router
+from app.api.v1.handlers.setting_handler import router as settings_router
 from app.api.v1.handlers.catalog_handler import (
     brands_router
     , categories_router
@@ -67,4 +69,6 @@ router.include_router(roles_router)
 router.include_router(branches_router)
 router.include_router(warehouses_router)
 router.include_router(terminals_router)
+router.include_router(shifts_router)
+router.include_router(settings_router)
 router.include_router(audit_router)

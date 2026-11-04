@@ -39,6 +39,7 @@ from app.models.base_data_schema_model import (  # noqa: F401
     ROLE_MODEL,
     SIZE_MODEL,
     STATUS_MODEL,
+    SYSTEM_SETTING_MODEL,
     TRANSLATE_MODEL,
     role_permissions,
 )
@@ -56,6 +57,7 @@ from app.models.data_schema_model import (  # noqa: F401
     LOYALTY_TRANSACTION_MODEL,
     NOTIFICATION_SETTING_MODEL,
     PAYMENT_TRANSACTION_MODEL,
+    POS_SHIFT_MODEL,
     POS_TERMINAL_MODEL,
     PRODUCT_MODEL,
     PRODUCT_VARIANT_MODEL,
@@ -94,12 +96,14 @@ Color               = COLOR_MODEL
 Size                = SIZE_MODEL
 ExpenseCategory     = EXPENSE_CATEGORY_MODEL
 LabelTemplate       = LABEL_TEMPLATE_MODEL
+SystemSetting       = SYSTEM_SETTING_MODEL
 
 User                = USER_MODEL
 RefreshToken        = REFRESH_TOKEN_MODEL
 Branch              = BRANCH_MODEL
 Warehouse           = WAREHOUSE_MODEL
 PosTerminal         = POS_TERMINAL_MODEL
+PosShift            = POS_SHIFT_MODEL
 Supplier            = SUPPLIER_MODEL
 Product             = PRODUCT_MODEL
 ProductVariant      = PRODUCT_VARIANT_MODEL
@@ -207,6 +211,8 @@ __all__ = [
     "EXPENSE_CATEGORY_MODEL",
     "LabelTemplate",
     "LABEL_TEMPLATE_MODEL",
+    "SystemSetting",
+    "SYSTEM_SETTING_MODEL",
     "User",
     "USER_MODEL",
     "user_roles",
@@ -216,6 +222,10 @@ __all__ = [
     "BRANCH_MODEL",
     "Warehouse",
     "WAREHOUSE_MODEL",
+    "PosTerminal",
+    "POS_TERMINAL_MODEL",
+    "PosShift",
+    "POS_SHIFT_MODEL",
     "Supplier",
     "SUPPLIER_MODEL",
     "Product",

@@ -22,6 +22,7 @@ from app.core.exceptions import BAD_REQUEST_EXCEPTION, NOT_FOUND_EXCEPTION
 from app.core.logging import get_logger
 from app.models import (
     Branch
+    , PosShift
     , PosTerminal
     , ProductVariant
     , Return
@@ -75,6 +76,7 @@ class SALE_SERVICE:
         , notes           : Optional[str]                  = None
         , promotion_id    : Optional[UUID]                 = None
         , terminal_id     : Optional[UUID]                 = None
+        , shift_id        : Optional[UUID]                 = None
         , payments        : Optional[List[Dict[str, Any]]] = None
         , background_tasks: Optional[BackgroundTasks]      = None
     ) -> Sale:
@@ -97,6 +99,21 @@ class SALE_SERVICE:
             if not warehouse_id and term.warehouse_id:
                 warehouse_id = term.warehouse_id
             term.last_active_at = datetime.now(timezone.utc)
+
+        if not shift_id and terminal_id:
+            active_shift = (
+                await self.db.execute(
+                    select(PosShift.id)
+                    .where(
+                        PosShift.terminal_id == terminal_id,
+                        PosShift.status_code == "OPEN",
+                    )
+                    .order_by(PosShift.opened_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if active_shift:
+                shift_id = active_shift
 
         if not branch_id and _DEFAULT_BRANCH_ID:
             branch_id = _DEFAULT_BRANCH_ID
@@ -210,6 +227,7 @@ class SALE_SERVICE:
             , cashier_id    = cashier_id
             , promotion_id  = promotion_id
             , terminal_id   = terminal_id
+            , shift_id      = shift_id
         )
         self.db.add(sale)
 

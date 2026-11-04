@@ -32,6 +32,8 @@ from app.api.v1.endpoints.products import variant_router
 from app.api.v1.endpoints.promotions import router as promotions_router
 from app.api.v1.endpoints.sales import returns_router, router as sales_router
 from app.api.v1.endpoints.scanner import router as scanner_router
+from app.api.v1.endpoints.settings import router as settings_router
+from app.api.v1.endpoints.shifts import router as shifts_router
 from app.api.v1.endpoints.terminals import router as terminals_router
 
 # Root lane router
@@ -54,6 +56,8 @@ _protected.include_router(inventory_router)
 _protected.include_router(branches_router)
 _protected.include_router(warehouses_router)
 _protected.include_router(terminals_router)
+_protected.include_router(shifts_router)
+_protected.include_router(settings_router)
 _protected.include_router(sales_router)
 _protected.include_router(returns_router)
 _protected.include_router(customers_router)
