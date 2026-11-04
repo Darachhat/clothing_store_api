@@ -96,7 +96,12 @@ async def create_sale(
         background_tasks=background_tasks,
     )
     await db.commit()
-    return sale
+    res = await db.execute(
+        select(Sale)
+        .where(Sale.id == sale.id)
+        .options(*_sale_eager_options())
+    )
+    return res.scalar_one()
 
 
 @router.get("/returns", response_model=list[RETURN_RESPONSE_SCHEMA])
@@ -203,7 +208,12 @@ async def complete_sale(
         background_tasks=background_tasks,
     )
     await db.commit()
-    return sale
+    res = await db.execute(
+        select(Sale)
+        .where(Sale.id == sale.id)
+        .options(*_sale_eager_options())
+    )
+    return res.scalar_one()
 
 
 @router.post("/{id}/cancel", response_model=SALE_RESPONSE_SCHEMA)

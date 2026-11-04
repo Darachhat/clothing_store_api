@@ -103,7 +103,7 @@ class BASE_MIDDLEWARE(BaseHTTPMiddleware):
             resp_duration = Decimal(str(duration_ms))
             resp_datetime = datetime.now(timezone.utc)
             resp_code     = exc.status_code
-            logger.warning(f"[{request_id}] Domain Exception: code={exc.code} msg='{exc.message}' ({duration_ms}ms)")
+            logger.warning("[{}] Domain Exception: code={} msg='{}' ({}ms)", request_id, exc.code, exc.message, duration_ms)
             content = {
                 "code"         : exc.code
                 , "message"    : exc.message
@@ -126,7 +126,7 @@ class BASE_MIDDLEWARE(BaseHTTPMiddleware):
             resp_duration = Decimal(str(duration_ms))
             resp_datetime = datetime.now(timezone.utc)
             resp_code     = 500
-            logger.error(f"[{request_id}] Unhandled Exception: {str(exc)} ({duration_ms}ms)", exc_info=True)
+            logger.error("[{}] Unhandled Exception: {} ({}ms)", request_id, str(exc), duration_ms, exc_info=True)
             content = {
                 "code"         : RESPONSE_CODE_ENUM.INTERNAL_SERVER_ERROR
                 , "message"    : "An unexpected server error occurred."

@@ -290,7 +290,18 @@ class PAYMENT_SERVICE:
         if new_status == "APPROVED":
             tx.paid_at = datetime.now(timezone.utc)
 
-            payment_method_name = PAYMENT_METHOD_ENUM.CARD.value if tx.payment_option == "cards" else "ABA_KHQR"
+            payment_method_name = "ABA_PAYWAY"
+            if tx.payment_option == "cards":
+                payment_method_name = PAYMENT_METHOD_ENUM.CARD.value
+            elif tx.payment_option in ("bakong", "abapay"):
+                payment_method_name = "ABA_KHQR"
+            elif tx.payment_option == "alipay":
+                payment_method_name = "ALIPAY"
+            elif tx.payment_option == "wechat":
+                payment_method_name = "WECHAT"
+            elif tx.payment_option == "google_pay":
+                payment_method_name = "GOOGLE_PAY"
+
             card_info = ""
             try:
                 detail_resp = await payway_client.get_transaction_detail(tx.tran_id)
@@ -302,6 +313,10 @@ class PAYMENT_SERVICE:
                     card_info           = f"{pay_type} {payer_acc}".strip()
                 elif pay_type in ("ABA PAY", "KHQR"):
                     payment_method_name = "ABA_KHQR"
+                elif pay_type in ("ALIPAY",):
+                    payment_method_name = "ALIPAY"
+                elif pay_type in ("WECHAT", "WECHAT PAY"):
+                    payment_method_name = "WECHAT"
 
                 safe_detail = {k: v for k, v in detail_data.items() if k not in ("hash",)}
                 if isinstance(tx.last_response, dict):
