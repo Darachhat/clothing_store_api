@@ -14,6 +14,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_active_user
 from app.models import PaymentTransaction, User
@@ -23,7 +24,7 @@ from app.schemas.payment_schema import (
     , PAYMENT_PURCHASE_FORM_RESPONSE_SCHEMA
     , PAYMENT_TRANSACTION_RESPONSE_SCHEMA
 )
-from app.services.payment_service import PAYMENT_SERVICE, PAYMENT_SERVICE
+from app.services.payment_service import PAYMENT_SERVICE
 
 router = APIRouter(prefix="/payments/aba", tags=["ABA PayWay"])
 
@@ -56,6 +57,7 @@ async def create_purchase_form(
 
     return PAYMENT_PURCHASE_FORM_RESPONSE_SCHEMA(
         action_url=action_url,
+        script_url=settings.PAYWAY_CHECKOUT_SCRIPT_URL,
         form_data=form_data,
         payment_id=tx.id,
         tran_id=tx.tran_id,

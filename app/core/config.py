@@ -157,6 +157,7 @@ class SETTINGS(BaseSettings):
     # ── ABA PayWay ────────────────────────────────────────────────────────────
     PAYWAY_ENABLED                  : bool                                          = True
     PAYWAY_BASE_URL                 : str                                           = "https://checkout-sandbox.payway.com.kh"
+    PAYWAY_CHECKOUT_SCRIPT_URL      : str                                           = "https://checkout.payway.com.kh/plugins/checkout2-0.js?hide-close=2"
     PAYWAY_MERCHANT_ID              : str                                           = ""
     PAYWAY_PUBLIC_KEY               : str                                           = ""
     PAYWAY_RSA_PUBLIC_KEY           : str                                           = ""

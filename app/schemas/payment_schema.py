@@ -24,6 +24,7 @@ class PAYMENT_PURCHASE_FORM_REQUEST_SCHEMA(BaseModel):
 
 class PAYMENT_PURCHASE_FORM_RESPONSE_SCHEMA(BaseModel):
     action_url : str
+    script_url : str
     form_data  : Dict[str, str]
     payment_id : uuid.UUID
     tran_id    : str
