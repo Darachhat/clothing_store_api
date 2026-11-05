@@ -5,6 +5,7 @@ from app.api.v1.handlers.health_handler import router as health_router
 from app.api.v1.handlers.auth_handler import router as auth_router
 from app.api.v1.handlers.system_handler import router as system_router
 from app.api.v1.handlers.telegram_handler import router as telegram_router
+from app.api.v1.handlers.payment_gateway_handler import router as payment_gateway_router
 from app.api.v1.handlers.log_handler import router as log_router
 from app.api.v1.handlers.product_handler import router as products_router, variant_router
 from app.api.v1.handlers.attachment_handler import router as attachments_router, uploads_router
@@ -41,6 +42,7 @@ router.include_router(auth_router)
 _system_admin = [Depends(require_system_admin)]
 router.include_router(system_router, dependencies=_system_admin)
 router.include_router(telegram_router, dependencies=_system_admin)
+router.include_router(payment_gateway_router, dependencies=_system_admin)
 router.include_router(log_router, dependencies=_system_admin)
 
 # Domain Handlers

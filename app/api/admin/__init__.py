@@ -35,6 +35,7 @@ from app.api.v1.handlers.audit_handler import router as audit_router
 from app.api.v1.handlers.log_handler import router as log_router
 from app.api.v1.handlers.system_handler import router as system_router
 from app.api.v1.handlers.telegram_handler import router as telegram_router
+from app.api.v1.handlers.payment_gateway_handler import router as payment_gateway_router
 
 # Root lane router
 admin_router = APIRouter(prefix="/api/admin/v1", tags=["[Admin Lane]"])
@@ -75,5 +76,6 @@ _protected.include_router(audit_router)
 _protected.include_router(log_router)
 _protected.include_router(system_router)
 _protected.include_router(telegram_router)
+_protected.include_router(payment_gateway_router)
 
 admin_router.include_router(_protected)
