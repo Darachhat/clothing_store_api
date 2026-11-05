@@ -1,7 +1,7 @@
 """Reports API endpoints."""
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -26,11 +26,11 @@ def _resolve_date_range(
     from_date: date | None,
     to_date: date | None,
 ) -> tuple[date, date, datetime, datetime]:
-    today = datetime.now(UTC).date()
+    today = datetime.now(timezone.utc).date()
     resolved_start = start_date or from_date or (today - timedelta(days=30))
     resolved_end = end_date or to_date or today
-    start_dt = datetime.combine(resolved_start, datetime.min.time()).replace(tzinfo=UTC)
-    end_dt = datetime.combine(resolved_end, datetime.max.time()).replace(tzinfo=UTC)
+    start_dt = datetime.combine(resolved_start, datetime.min.time())
+    end_dt = datetime.combine(resolved_end, datetime.max.time())
     return resolved_start, resolved_end, start_dt, end_dt
 
 
@@ -50,27 +50,27 @@ async def dashboard(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("report.read")),
 ) -> dict:
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     today = now.date()
 
     if period == "today":
-        start = datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
+        start = datetime.combine(today, datetime.min.time())
         end = now
     elif period == "yesterday":
         yesterday = date.fromordinal(today.toordinal() - 1)
-        start = datetime.combine(yesterday, datetime.min.time()).replace(tzinfo=UTC)
-        end = datetime.combine(yesterday, datetime.max.time()).replace(tzinfo=UTC)
+        start = datetime.combine(yesterday, datetime.min.time())
+        end = datetime.combine(yesterday, datetime.max.time())
     elif period in ("7days", "last_7_days"):
-        start = datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC) - timedelta(days=7)
+        start = datetime.combine(today, datetime.min.time()) - timedelta(days=7)
         end = now
     elif period in ("30days", "last_30_days"):
         start = now - timedelta(days=30)
         end = now
     elif period in ("this_year", "year"):
-        start = datetime.combine(today.replace(month=1, day=1), datetime.min.time()).replace(tzinfo=UTC)
+        start = datetime.combine(today.replace(month=1, day=1), datetime.min.time())
         end = now
     else:  # this_month
-        start = datetime.combine(today.replace(day=1), datetime.min.time()).replace(tzinfo=UTC)
+        start = datetime.combine(today.replace(day=1), datetime.min.time())
         end = now
 
     # Total sales and revenue
@@ -198,9 +198,9 @@ async def warehouse_dashboard(
     """Warehouse-facing KPIs. Contains no revenue/profit data, so it only needs inventory.read."""
     from app.models import StockTransfer
 
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     today = now.date()
-    midnight = datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
+    midnight = datetime.combine(today, datetime.min.time())
     if period == "today":
         start, end = midnight, now
     elif period == "yesterday":
@@ -211,7 +211,7 @@ async def warehouse_dashboard(
     elif period in ("30days", "last_30_days"):
         start, end = now - timedelta(days=30), now
     else:  # this_month
-        start, end = datetime.combine(today.replace(day=1), datetime.min.time()).replace(tzinfo=UTC), now
+        start, end = datetime.combine(today.replace(day=1), datetime.min.time()), now
 
     stock_filter = []
     move_filter = [InventoryMovement.created_at >= start, InventoryMovement.created_at <= end]

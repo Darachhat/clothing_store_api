@@ -1,8 +1,8 @@
 """Store & System Configuration Settings Endpoints."""
 from __future__ import annotations
 
-from typing import Any, Dict
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any, Dict, Union
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -122,36 +122,62 @@ async def get_category_settings(
 
     merged: Dict[str, Any] = {}
     for r in records:
+        if isinstance(r.value, dict):
+            merged.update(r.value)
         merged[r.key] = r.value
-    return {"category": category, "settings": merged}
+
+    response: Dict[str, Any] = dict(merged)
+    response["category"] = category
+    response["settings"] = {r.key: r.value for r in records}
+    return response
 
 
 @router.put("/{category}")
 async def update_category_setting(
     category: str,
-    body: GENERIC_SETTING_SCHEMA,
+    body: Union[GENERIC_SETTING_SCHEMA, Dict[str, Any]] = Body(...),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("user.manage")),
 ) -> dict:
     """Update setting entry within a category (Admin only)."""
+    if isinstance(body, GENERIC_SETTING_SCHEMA):
+        target_key = body.key
+        target_val = body.value
+        description = body.description
+    elif isinstance(body, dict) and "key" in body and "value" in body and isinstance(body["value"], dict):
+        target_key = str(body["key"])
+        target_val = body["value"]
+        description = body.get("description")
+    else:
+        # Direct dictionary of settings (e.g. from thermal receipts page or frontend form)
+        target_key = "template" if category == "receipt" else "config"
+        target_val = body if isinstance(body, dict) else {}
+        description = f"{category.capitalize()} settings"
+
     stmt = select(SystemSetting).where(
         SystemSetting.category == category,
-        SystemSetting.key == body.key,
+        SystemSetting.key == target_key,
     )
     record = (await db.execute(stmt)).scalar_one_or_none()
     if record:
-        record.value = body.value
-        if body.description:
-            record.description = body.description
+        record.value = target_val
+        if description:
+            record.description = description
     else:
         record = SystemSetting(
             category=category,
-            key=body.key,
-            value=body.value,
-            description=body.description,
+            key=target_key,
+            value=target_val,
+            description=description,
         )
         db.add(record)
 
     await db.commit()
-    return {"status": "success", "category": category, "key": body.key, "value": body.value}
+
+    result = dict(target_val) if isinstance(target_val, dict) else {}
+    result["status"] = "success"
+    result["category"] = category
+    result["key"] = target_key
+    result["value"] = target_val
+    return result
 
