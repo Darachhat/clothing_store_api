@@ -647,8 +647,18 @@ class AUTH_SERVICE:
                         await self._send_telegram_bot_message(
                             token,
                             chat_id,
-                            f"✅ Login confirmed for @{existing_user.username} ({existing_user.full_name})!\n\nYou can now return to your browser.",
-                            reply_markup={"remove_keyboard": True},
+                            f"✅ Login confirmed for @{existing_user.username} ({existing_user.full_name})!\n\nYou can return to your browser or tap below for Seamless Telegram Login:",
+                            reply_markup={
+                                "inline_keyboard": [[
+                                    {
+                                        "text": "🔐 Seamless Login to Admin Portal",
+                                        "login_url": {
+                                            "url": "https://admin.kimvannak.store/login",
+                                            "request_write_access": True,
+                                        },
+                                    }
+                                ]],
+                            },
                         )
                     else:
                         c_row.telegram_id = f"CHAT:{tg_id}"
@@ -711,6 +721,25 @@ class AUTH_SERVICE:
                         f"✅ Your Telegram account is now linked to @{target_user.username} ({target_user.full_name})!\n\nYou can return to your browser.",
                         reply_markup={"remove_keyboard": True},
                     )
+
+            # 1b. Handle plain /start command with Seamless Telegram Login (login_url / keyboardButtonUrlAuth)
+            elif text == "/start":
+                await self._send_telegram_bot_message(
+                    token,
+                    chat_id,
+                    "👋 Welcome to Clothing Store Bot!\n\nTap the button below to log in seamlessly with your Telegram account:",
+                    reply_markup={
+                        "inline_keyboard": [[
+                            {
+                                "text": "🔐 Log in to Admin Portal",
+                                "login_url": {
+                                    "url": "https://admin.kimvannak.store/login",
+                                    "request_write_access": True,
+                                },
+                            }
+                        ]],
+                    },
+                )
 
             # 2. Handle shared contact (request_contact=True) to verify phone & link account
             contact = msg.get("contact")
