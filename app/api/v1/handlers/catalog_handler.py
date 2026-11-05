@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from slugify import slugify
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache.response_cache import RESPONSE_CACHE_SERVICE, cache_response
 from app.core.database import get_db
 from app.core.deps import require_permission
 from app.models import Product, User
@@ -47,7 +48,9 @@ suppliers_router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
 # ─── Categories ───────────────────────────────────────────────────────────────
 @categories_router.get("", response_model=list[CATEGORY_RESPONSE_SCHEMA], include_in_schema=False)
 @categories_router.get("/", response_model=list[CATEGORY_RESPONSE_SCHEMA])
+@cache_response(ttl=300, namespace="categories")
 async def list_categories(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
@@ -70,6 +73,7 @@ async def create_category(
     data["slug"] = slug
     obj = await repo.create(**data)
     await PRODUCT_SERVICE.increment_catalog_version(db)
+    await RESPONSE_CACHE_SERVICE.invalidate_namespace("categories")
     await db.commit()
     return obj
 
@@ -130,6 +134,7 @@ async def delete_category(
         )
     await repo.delete(obj)
     await PRODUCT_SERVICE.increment_catalog_version(db)
+    await RESPONSE_CACHE_SERVICE.invalidate_namespace("categories")
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -204,6 +209,7 @@ async def delete_color(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Color not found")
     await repo.delete(obj)
     await PRODUCT_SERVICE.increment_catalog_version(db)
+    await RESPONSE_CACHE_SERVICE.invalidate_namespace("categories")
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -278,6 +284,7 @@ async def delete_size(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Size not found")
     await repo.delete(obj)
     await PRODUCT_SERVICE.increment_catalog_version(db)
+    await RESPONSE_CACHE_SERVICE.invalidate_namespace("categories")
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -308,6 +315,7 @@ async def create_brand(
     data["slug"] = slug
     obj = await repo.create(**data)
     await PRODUCT_SERVICE.increment_catalog_version(db)
+    await RESPONSE_CACHE_SERVICE.invalidate_namespace("categories")
     await db.commit()
     return obj
 
@@ -368,6 +376,7 @@ async def delete_brand(
         )
     await repo.delete(obj)
     await PRODUCT_SERVICE.increment_catalog_version(db)
+    await RESPONSE_CACHE_SERVICE.invalidate_namespace("categories")
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

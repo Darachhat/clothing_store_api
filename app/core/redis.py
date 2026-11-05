@@ -60,6 +60,13 @@ class _IN_MEMORY_REDIS_FALLBACK:
         self._store.clear()
         return True
 
+    async def delete_pattern(self, pattern: str) -> int:
+        import fnmatch
+        keys_to_del = [k for k in self._store.keys() if fnmatch.fnmatchcase(k, pattern)]
+        for k in keys_to_del:
+            del self._store[k]
+        return len(keys_to_del)
+
     async def aclose(self) -> None:
         pass
 
@@ -162,6 +169,32 @@ async def redis_delete(key: str) -> bool:
         _use_fallback = True
         await _fallback_client.delete(key)
         return True
+
+
+async def redis_delete_pattern(pattern: str) -> int:
+    """Safely delete all keys matching a glob pattern using SCAN to avoid blocking."""
+    global _use_fallback
+    deleted = 0
+    try:
+        client = get_redis_client()
+        if isinstance(client, _IN_MEMORY_REDIS_FALLBACK):
+            return await client.delete_pattern(pattern)
+
+        keys_batch = []
+        async for key in client.scan_iter(match=pattern, count=100):
+            keys_batch.append(key)
+            if len(keys_batch) >= 100:
+                await client.delete(*keys_batch)
+                deleted += len(keys_batch)
+                keys_batch.clear()
+        if keys_batch:
+            await client.delete(*keys_batch)
+            deleted += len(keys_batch)
+        return deleted
+    except Exception as e:
+        logger.warning(f"Redis DELETE_PATTERN failed for pattern {pattern}: {e}")
+        _use_fallback = True
+        return await _fallback_client.delete_pattern(pattern)
 
 
 @asynccontextmanager

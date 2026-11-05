@@ -8,10 +8,11 @@ from __future__ import annotations
 import math
 import uuid
 from typing import Any, Dict, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache.response_cache import RESPONSE_CACHE_SERVICE, cache_response
 from app.cache.translation_cache import TRANSLATION_CACHE
 from app.core.database import get_db
 from app.core.deps import get_current_active_user, require_permission
@@ -32,7 +33,9 @@ router = APIRouter(prefix="/translations", tags=["Translations CMS"])
 
 @router.get("", response_model=Dict[str, Any])
 @router.get("/", response_model=Dict[str, Any], include_in_schema=False)
+@cache_response(ttl=3600, namespace="translations", include_locale=True)
 async def get_translations(
+    request: Request,
     lang: Optional[str] = Query(None, description="Language code: en, km, cn, jp, kr"),
     schema_name: Optional[str] = Query("admin_front", description="UI schema name (e.g. admin_front, pos, web)"),
     db: AsyncSession = Depends(get_db),
@@ -48,7 +51,9 @@ async def get_translations(
 # ─── CMS Content Management Endpoints ────────────────────────────────────────
 
 @router.get("/items", response_model=TRANSLATION_PAGINATED_RESPONSE_SCHEMA)
+@cache_response(ttl=60, namespace="translations", include_role=True)
 async def list_translation_items(
+    request: Request,
     q: Optional[str] = Query(None, description="Search keyword across keys and translated strings"),
     schema_name: Optional[str] = Query(None, description="Filter by schema name"),
     table_name: Optional[str] = Query(None, description="Filter by table/section name"),
@@ -152,6 +157,7 @@ async def create_translation_item(
 
     # Invalidate cache so frontend immediately picks up new content
     await TRANSLATION_CACHE.invalidate_cache()
+    await RESPONSE_CACHE_SERVICE.invalidate_namespace("translations")
     return record
 
 
@@ -216,6 +222,7 @@ async def update_translation_item(
 
     # Invalidate cache so frontend displays the updated translations immediately
     await TRANSLATION_CACHE.invalidate_cache()
+    await RESPONSE_CACHE_SERVICE.invalidate_namespace("translations")
     return item
 
 
@@ -240,6 +247,7 @@ async def delete_translation_item(
 
     await db.commit()
     await TRANSLATION_CACHE.invalidate_cache()
+    await RESPONSE_CACHE_SERVICE.invalidate_namespace("translations")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -250,9 +258,10 @@ async def purge_translation_cache(
 ) -> Dict[str, str]:
     """Force flush Redis translation cache and warm up baseline keys."""
     await TRANSLATION_CACHE.invalidate_cache()
+    await RESPONSE_CACHE_SERVICE.invalidate_namespace("translations")
     # Warm up cache
     await TRANSLATION_CACHE.get_translations(db=db, schema_name="admin_front")
-    return {"status": "success", "message": "Translation Redis cache purged and warmed successfully."}
+    return {"status": "success", "message": "Translation Redis response cache purged and warmed successfully."}
 
 
 @router.post("/seed", status_code=status.HTTP_200_OK)
@@ -262,4 +271,5 @@ async def reseed_translations(
 ) -> Dict[str, Any]:
     """Re-seed standard translation keys into base_data.translate and warm cache."""
     count = await TRANSLATION_CACHE.seed_translations(db=db)
+    await RESPONSE_CACHE_SERVICE.invalidate_namespace("translations")
     return {"status": "success", "seeded_count": count}
