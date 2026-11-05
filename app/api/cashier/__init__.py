@@ -35,12 +35,14 @@ from app.api.v1.endpoints.scanner import router as scanner_router
 from app.api.v1.endpoints.settings import router as settings_router
 from app.api.v1.endpoints.shifts import router as shifts_router
 from app.api.v1.endpoints.terminals import router as terminals_router
+from app.api.v1.handlers.translation_handler import router as translation_router
 
 # Root lane router
 cashier_router = APIRouter(prefix="/api/cashier/v1", tags=["[Cashier Lane]"])
 
-# ── Public within lane: auth ───────────────────────────────────────────────
+# ── Public within lane: auth & translations ────────────────────────────────
 cashier_router.include_router(auth_router)
+cashier_router.include_router(translation_router)
 
 # ── Protected: CASHIER role required ──────────────────────────────────────
 _protected = APIRouter(dependencies=[Depends(require_cashier)])

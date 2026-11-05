@@ -900,6 +900,39 @@ ADMIN_FRONT_TRANSLATIONS: List[Dict[str, Any]] = [
     },
 ]
 
+POS_TRANSLATIONS: List[Dict[str, Any]] = [
+    {"schema_name": "pos", "table_name": "header", "column_name": "search_placeholder", "en": "Scan barcode or search name / SKU (F2)", "km": "ស្កេនបាកូដ ឬស្វែងរកឈ្មោះ / SKU (F2)", "cn": "扫描条形码或搜索商品 (F2)", "jp": "バーコードスキャンまたは検索 (F2)", "kr": "바코드 스캔 또는 상품 검색 (F2)"},
+    {"schema_name": "pos", "table_name": "header", "column_name": "camera", "en": "Camera", "km": "កាមេរ៉ា", "cn": "相机", "jp": "カメラ", "kr": "카메라"},
+    {"schema_name": "pos", "table_name": "header", "column_name": "parked", "en": "Parked", "km": "ផ្អាកទុក", "cn": "挂单", "jp": "保留", "kr": "보류"},
+    {"schema_name": "pos", "table_name": "header", "column_name": "last_receipt", "en": "Last receipt", "km": "វិក្កយបត្រចុងក្រោយ", "cn": "上一小票", "jp": "直前のレシート", "kr": "최근 영수증"},
+    {"schema_name": "pos", "table_name": "header", "column_name": "history", "en": "History", "km": "ប្រវត្តិលក់", "cn": "历史记录", "jp": "履歴", "kr": "판매 내역"},
+    {"schema_name": "pos", "table_name": "header", "column_name": "display", "en": "Display", "km": "អេក្រង់អតិថិជន", "cn": "客显屏", "jp": "客面表示", "kr": "고객 화면"},
+    {"schema_name": "pos", "table_name": "header", "column_name": "shift", "en": "Shift", "km": "វេនគិតប្រាក់", "cn": "交接班", "jp": "シフト", "kr": "교대"},
+    {"schema_name": "pos", "table_name": "header", "column_name": "open_shift", "en": "Open Shift", "km": "បើកវេន", "cn": "开班", "jp": "シフト開始", "kr": "교대 시작"},
+    {"schema_name": "pos", "table_name": "header", "column_name": "stickers", "en": "Stickers", "km": "បោះពុម្ពស្លាក", "cn": "标签打印", "jp": "ラベル", "kr": "라벨"},
+    {"schema_name": "pos", "table_name": "header", "column_name": "shortcuts", "en": "Shortcuts", "km": "ផ្លូវកាត់ (F1)", "cn": "快捷键", "jp": "ショートカット", "kr": "단축키"},
+    {"schema_name": "pos", "table_name": "cart", "column_name": "title", "en": "Current Sale", "km": "ការលក់បច្ចុប្បន្ន", "cn": "当前销售", "jp": "現在のお会計", "kr": "현재 결제"},
+    {"schema_name": "pos", "table_name": "cart", "column_name": "clear", "en": "Clear Cart", "km": "សម្អាតកន្ត្រក", "cn": "清空购物车", "jp": "カートを空にする", "kr": "장바구니 비우기"},
+    {"schema_name": "pos", "table_name": "cart", "column_name": "hold", "en": "Park Order", "km": "ផ្អាកការបញ្ជាទិញ", "cn": "挂单保存", "jp": "伝票保留", "kr": "주문 보류"},
+    {"schema_name": "pos", "table_name": "cart", "column_name": "customer", "en": "Customer", "km": "អតិថិជន", "cn": "客户", "jp": "お客様", "kr": "고객"},
+    {"schema_name": "pos", "table_name": "cart", "column_name": "walk_in", "en": "Walk-in Customer", "km": "អតិថិជនទូទៅ", "cn": "散客", "jp": "一般顧客", "kr": "일반 고객"},
+    {"schema_name": "pos", "table_name": "cart", "column_name": "subtotal", "en": "Subtotal", "km": "សរុបរង", "cn": "小计", "jp": "小計", "kr": "소계"},
+    {"schema_name": "pos", "table_name": "cart", "column_name": "discount", "en": "Discount", "km": "បញ្ចុះតម្លៃ", "cn": "折扣", "jp": "割引", "kr": "할인"},
+    {"schema_name": "pos", "table_name": "cart", "column_name": "tax", "en": "Tax", "km": "ពន្ធ", "cn": "税费", "jp": "消費税", "kr": "세금"},
+    {"schema_name": "pos", "table_name": "cart", "column_name": "total", "en": "Total", "km": "សរុប", "cn": "合计", "jp": "合計", "kr": "총액"},
+    {"schema_name": "pos", "table_name": "cart", "column_name": "pay", "en": "Checkout / Pay (Space)", "km": "ទូទាត់ប្រាក់ (Space)", "cn": "结算支付 (空格)", "jp": "お会計 (スペース)", "kr": "결제하기 (스페이스)"},
+    {"schema_name": "pos", "table_name": "payment", "column_name": "title", "en": "Payment", "km": "ការទូទាត់ប្រាក់", "cn": "收银结算", "jp": "決済", "kr": "결제"},
+    {"schema_name": "pos", "table_name": "payment", "column_name": "cash", "en": "Cash", "km": "សាច់ប្រាក់", "cn": "现金", "jp": "現金", "kr": "현금"},
+    {"schema_name": "pos", "table_name": "payment", "column_name": "khqr", "en": "KHQR / ABA Pay", "km": "ទូទាត់តាម KHQR / ABA", "cn": "KHQR扫码支付", "jp": "KHQR決済", "kr": "KHQR 결제"},
+    {"schema_name": "pos", "table_name": "payment", "column_name": "received", "en": "Amount Received", "km": "ប្រាក់ទទួល", "cn": "实收金额", "jp": "預かり金額", "kr": "받은 금액"},
+    {"schema_name": "pos", "table_name": "payment", "column_name": "change", "en": "Change Due", "km": "ប្រាក់អាប់", "cn": "找零", "jp": "お釣り", "kr": "거스름돈"},
+    {"schema_name": "pos", "table_name": "payment", "column_name": "complete", "en": "Complete Payment", "km": "បញ្ចប់ការទូទាត់", "cn": "确认完成支付", "jp": "決済を完了する", "kr": "결제 완료"},
+    {"schema_name": "pos", "table_name": "settings", "column_name": "title", "en": "POS Terminal Settings", "km": "ការកំណត់ម៉ាស៊ីន POS", "cn": "POS终端设置", "jp": "POSレジ設定", "kr": "POS 단말기 설정"},
+    {"schema_name": "pos", "table_name": "settings", "column_name": "language_pref", "en": "Language & Regional Preferences", "km": "ការកំណត់ភាសា & តំបន់", "cn": "语言与地区偏好", "jp": "言語と地域設定", "kr": "언어 및 지역 환경 설정"},
+    {"schema_name": "pos", "table_name": "settings", "column_name": "language_desc", "en": "Select the active display language for POS terminal and customer-facing interfaces.", "km": "ជ្រើសរើសភាសាសម្រាប់ផ្ទាំងគិតប្រាក់ POS និងអេក្រង់អតិថិជន។", "cn": "选择POS收银机与客显屏幕的当前显示语言。", "jp": "POSレジおよび顧客面表示の言語を選択してください。", "kr": "POS 단말기 및 고객용 디스플레이의 표시 언어를 선택하세요."},
+]
+
+
 
 class TranslationCacheService:
     """Redis-backed fast caching layer for TRANSLATE_MODEL."""
@@ -988,7 +1021,7 @@ class TranslationCacheService:
     async def invalidate_cache(cls) -> None:
         """Clear cached translation keys."""
         try:
-            for s in ("all", "admin_front", "ui", "common"):
+            for s in ("all", "admin_front", "pos", "ui", "common"):
                 for l in ("all", "en", "km", "cn", "jp", "kr"):
                     await redis_delete(cls._make_key(s, l))
             logger.info("[TRANSLATION_CACHE] Cleared translation cache keys.")
@@ -999,7 +1032,8 @@ class TranslationCacheService:
     async def seed_translations(cls, db: AsyncSession) -> int:
         """Upsert default translations into base_data.translate and warm cache."""
         inserted = 0
-        for item in ADMIN_FRONT_TRANSLATIONS:
+        all_seeds = ADMIN_FRONT_TRANSLATIONS + POS_TRANSLATIONS
+        for item in all_seeds:
             stmt = select(TRANSLATE_MODEL).where(
                 TRANSLATE_MODEL.schema_name == item["schema_name"],
                 TRANSLATE_MODEL.table_name == item["table_name"],
