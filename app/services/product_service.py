@@ -174,6 +174,14 @@ class PRODUCT_SERVICE:
             , slug = slug
             , **body.model_dump()
         )
+        from app.services.audit_service import AUDIT_SERVICE
+        await AUDIT_SERVICE.record(
+            db,
+            action="PRODUCT_CREATED",
+            entity_type="product",
+            entity_id=product.id,
+            new_data={"code": product.code, "name": product.name},
+        )
         await cls.increment_catalog_version(db)
         await db.commit()
         return product
@@ -192,7 +200,18 @@ class PRODUCT_SERVICE:
         product = await repo.get_by_id(product_id)
         if not product:
             raise NOT_FOUND_EXCEPTION("Product not found")
+        old_name = product.name
+        old_status = product.status
         product = await repo.update(product, **body.model_dump(exclude_none=True))
+        from app.services.audit_service import AUDIT_SERVICE
+        await AUDIT_SERVICE.record(
+            db,
+            action="PRODUCT_UPDATED",
+            entity_type="product",
+            entity_id=product.id,
+            old_data={"name": old_name, "status": old_status},
+            new_data={"name": product.name, "status": product.status},
+        )
         await cls.increment_catalog_version(db)
         await db.commit()
         return product
@@ -203,6 +222,14 @@ class PRODUCT_SERVICE:
         product = await repo.get_by_id(product_id)
         if not product:
             raise NOT_FOUND_EXCEPTION("Product not found")
+        from app.services.audit_service import AUDIT_SERVICE
+        await AUDIT_SERVICE.record(
+            db,
+            action="PRODUCT_DELETED",
+            entity_type="product",
+            entity_id=product.id,
+            old_data={"code": product.code, "name": product.name},
+        )
         await repo.delete(product)
         await cls.increment_catalog_version(db)
         await db.commit()

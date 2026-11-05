@@ -265,6 +265,15 @@ class PURCHASE_SERVICE:
                     f"Purchase item {item_in.purchase_item_id or item_in.variant_id} does not belong to purchase order {po.id}"
                 )
 
+            if item_in.quantity_received <= 0:
+                raise BAD_REQUEST_EXCEPTION("Received quantity must be greater than zero")
+
+            if po_item.quantity_received + item_in.quantity_received > po_item.quantity_ordered:
+                remaining = po_item.quantity_ordered - po_item.quantity_received
+                raise BAD_REQUEST_EXCEPTION(
+                    f"Cannot receive {item_in.quantity_received} units for variant {item_in.variant_id}; only {remaining} remaining on order"
+                )
+
             effective_unit_cost = item_in.unit_cost if item_in.unit_cost is not None else po_item.unit_cost
 
             gr_item = GoodsReceiptItem(

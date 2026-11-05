@@ -45,7 +45,7 @@ async def list_users(
 async def create_user(
     payload: USER_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("user.manage")),
+    current_user: User = Depends(require_permission("user.manage")),
 ) -> User:
     repo = UserRepository(db)
     if await repo.username_exists(payload.username.lower().strip()):
@@ -71,6 +71,16 @@ async def create_user(
         roles=roles,
     )
     db.add(user)
+    await db.flush()
+    from app.services.audit_service import AUDIT_SERVICE
+    await AUDIT_SERVICE.record(
+        db,
+        action="USER_CREATED",
+        entity_type="user",
+        entity_id=user.id,
+        user_id=current_user.id,
+        new_data={"username": user.username, "roles": [r.name for r in roles]},
+    )
     await db.commit()
     return await repo.get_by_id(user.id)
 
@@ -94,12 +104,18 @@ async def update_user(
     user_id: UUID,
     payload: USER_UPDATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("user.manage")),
+    current_user: User = Depends(require_permission("user.manage")),
 ) -> User:
     repo = UserRepository(db)
     user = await repo.get_by_id(user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if current_user.id == user_id and payload.status is not None and payload.status != "ACTIVE":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot deactivate your own account")
+
+    old_status = user.status
+    old_roles = [r.name for r in (user.roles or [])]
 
     if payload.email and payload.email.lower().strip() != user.email:
         if await repo.email_exists(payload.email.lower().strip()):
@@ -120,10 +136,23 @@ async def update_user(
         if payload.role_ids:
             role_stmt = select(Role).where(Role.id.in_(payload.role_ids))
             roles_result = await db.execute(role_stmt)
-            user.roles = list(roles_result.scalars().all())
+            new_roles = list(roles_result.scalars().all())
         else:
-            user.roles = []
+            new_roles = []
+        if current_user.id == user_id and "ADMIN" in old_roles and not any(r.name == "ADMIN" for r in new_roles):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove ADMIN role from your own account")
+        user.roles = new_roles
 
+    from app.services.audit_service import AUDIT_SERVICE
+    await AUDIT_SERVICE.record(
+        db,
+        action="USER_UPDATED",
+        entity_type="user",
+        entity_id=user.id,
+        user_id=current_user.id,
+        old_data={"status": old_status, "roles": old_roles},
+        new_data={"status": user.status, "roles": [r.name for r in (user.roles or [])]},
+    )
     await db.commit()
     return await repo.get_by_id(user.id)
 
@@ -142,7 +171,18 @@ async def deactivate_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    old_status = user.status
     user.status = "INACTIVE"
+    from app.services.audit_service import AUDIT_SERVICE
+    await AUDIT_SERVICE.record(
+        db,
+        action="USER_DEACTIVATED",
+        entity_type="user",
+        entity_id=user.id,
+        user_id=current_user.id,
+        old_data={"status": old_status},
+        new_data={"status": "INACTIVE", "username": user.username},
+    )
     await db.commit()
     return await repo.get_by_id(user.id)
 
@@ -201,7 +241,7 @@ async def update_role(
     role_id: UUID,
     payload: ROLE_UPDATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(require_permission("user.manage")),
+    current_user: User = Depends(require_permission("user.manage")),
 ) -> Role:
     repo = RoleRepository(db)
     role = await repo.get_by_id(role_id)
@@ -210,6 +250,7 @@ async def update_role(
     if role.is_system and payload.name and payload.name.upper() != role.name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot rename system role")
 
+    old_perms = [p.code for p in (role.permissions or [])]
     if payload.name:
         role.name = payload.name.upper().strip()
     if payload.description is not None:
@@ -222,6 +263,16 @@ async def update_role(
         else:
             role.permissions = []
 
+    from app.services.audit_service import AUDIT_SERVICE
+    await AUDIT_SERVICE.record(
+        db,
+        action="ROLE_UPDATED",
+        entity_type="role",
+        entity_id=role.id,
+        user_id=current_user.id,
+        old_data={"name": role.name, "permissions": old_perms},
+        new_data={"name": role.name, "permissions": [p.code for p in (role.permissions or [])]},
+    )
     await db.commit()
     return await repo.get_by_id(role.id)
 

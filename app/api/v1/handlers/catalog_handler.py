@@ -5,11 +5,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from slugify import slugify
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import require_permission
-from app.models import User
+from app.models import Product, User
 from app.services.product_service import PRODUCT_SERVICE
 from app.repositories.product_repository import (
     BrandRepository,
@@ -117,6 +118,16 @@ async def delete_category(
     obj = await repo.get_by_id(id)
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+    assigned_count = (
+        await db.execute(
+            select(func.count()).select_from(Product).where(Product.category_id == id, Product.status != "ARCHIVED")
+        )
+    ).scalar_one()
+    if assigned_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot delete category '{obj.name}' while it is assigned to {assigned_count} active product(s)",
+        )
     await repo.delete(obj)
     await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()
@@ -345,6 +356,16 @@ async def delete_brand(
     obj = await repo.get_by_id(id)
     if not obj:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Brand not found")
+    assigned_count = (
+        await db.execute(
+            select(func.count()).select_from(Product).where(Product.brand_id == id, Product.status != "ARCHIVED")
+        )
+    ).scalar_one()
+    if assigned_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot delete brand '{obj.name}' while it is assigned to {assigned_count} active product(s)",
+        )
     await repo.delete(obj)
     await PRODUCT_SERVICE.increment_catalog_version(db)
     await db.commit()

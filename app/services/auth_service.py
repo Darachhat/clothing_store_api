@@ -80,6 +80,17 @@ class AUTH_SERVICE:
             , user_agent = request.headers.get("user-agent") if request else None
         )
         self.db.add(rt)
+        from app.services.audit_service import AUDIT_SERVICE
+        await AUDIT_SERVICE.record(
+            self.db
+            , action      = "USER_LOGIN"
+            , entity_type = "user"
+            , entity_id   = user.id
+            , user_id     = user.id
+            , ip_address  = rt.ip_address
+            , user_agent  = rt.user_agent
+            , new_data    = {"username": user.username}
+        )
         await self.db.commit()
         await self.db.refresh(user)
 
@@ -128,6 +139,15 @@ class AUTH_SERVICE:
         stored     = await self.token_repo.get_by_hash(token_hash)
         if stored:
             stored.revoked = True
+            from app.services.audit_service import AUDIT_SERVICE
+            await AUDIT_SERVICE.record(
+                self.db
+                , action      = "USER_LOGOUT"
+                , entity_type = "user"
+                , entity_id   = stored.user_id
+                , user_id     = stored.user_id
+                , new_data    = {"revoked_token_id": str(stored.id)}
+            )
             await self.db.commit()
 
     async def change_password(
@@ -139,6 +159,15 @@ class AUTH_SERVICE:
         if not verify_password(current_password, user.hashed_password):
             raise BAD_REQUEST_EXCEPTION("Current password is incorrect")
         user.hashed_password = hash_password(new_password)
+        from app.services.audit_service import AUDIT_SERVICE
+        await AUDIT_SERVICE.record(
+            self.db
+            , action      = "USER_PASSWORD_CHANGED"
+            , entity_type = "user"
+            , entity_id   = user.id
+            , user_id     = user.id
+            , new_data    = {"username": user.username}
+        )
         await self.db.commit()
 
     async def login_payload(

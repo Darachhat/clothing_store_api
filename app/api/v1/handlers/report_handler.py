@@ -46,7 +46,7 @@ def _period_key(dt: datetime | date, group_by: str) -> str:
 
 @router.get("/dashboard")
 async def dashboard(
-    period: str = Query("today", pattern="^(today|yesterday|7days|last_7_days|30days|last_30_days|this_month)$"),
+    period: str = Query("today", pattern="^(today|yesterday|7days|last_7_days|30days|last_30_days|this_month|this_year|year)$"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("report.read")),
 ) -> dict:
@@ -65,6 +65,9 @@ async def dashboard(
         end = now
     elif period in ("30days", "last_30_days"):
         start = now - timedelta(days=30)
+        end = now
+    elif period in ("this_year", "year"):
+        start = datetime.combine(today.replace(month=1, day=1), datetime.min.time()).replace(tzinfo=UTC)
         end = now
     else:  # this_month
         start = datetime.combine(today.replace(day=1), datetime.min.time()).replace(tzinfo=UTC)
@@ -122,6 +125,56 @@ async def dashboard(
     )
     low_stock_count = low_stock_result.scalar_one()
 
+    # Top-selling products in period
+    top_products_res = await db.execute(
+        select(
+            ProductVariant.sku,
+            Product.name.label("product_name"),
+            func.coalesce(func.sum(SaleItem.quantity), 0).label("quantity_sold"),
+            func.coalesce(func.sum(SaleItem.subtotal), 0).label("revenue"),
+        )
+        .join(Sale, SaleItem.sale_id == Sale.id)
+        .join(ProductVariant, SaleItem.variant_id == ProductVariant.id)
+        .join(Product, ProductVariant.product_id == Product.id)
+        .where(
+            and_(
+                Sale.sale_status == "COMPLETED",
+                Sale.created_at >= start,
+                Sale.created_at <= end,
+            )
+        )
+        .group_by(ProductVariant.sku, Product.name)
+        .order_by(func.sum(SaleItem.quantity).desc())
+        .limit(5)
+    )
+    top_products = [
+        {
+            "sku": row.sku,
+            "product_name": row.product_name,
+            "quantity_sold": int(row.quantity_sold or 0),
+            "revenue": float(row.revenue or 0),
+        }
+        for row in top_products_res.all()
+    ]
+
+    # Sales trend buckets for chart
+    period_sales_res = await db.execute(
+        select(Sale.created_at, Sale.total).where(
+            and_(
+                Sale.sale_status == "COMPLETED",
+                Sale.created_at >= start,
+                Sale.created_at <= end,
+            )
+        ).order_by(Sale.created_at.asc())
+    )
+    group_mode = "month" if period in ("this_year", "year") else "day"
+    trend_buckets: dict[str, dict] = {}
+    for created_at_val, total_val in period_sales_res.all():
+        key = _period_key(created_at_val, group_mode)
+        b = trend_buckets.setdefault(key, {"label": key, "sales_count": 0, "revenue": 0.0})
+        b["sales_count"] += 1
+        b["revenue"] = round(b["revenue"] + float(total_val or 0), 2)
+
     return {
         "period": period,
         "sales_count": sales_row.count,
@@ -130,6 +183,8 @@ async def dashboard(
         "expenses": float(total_expenses),
         "net_profit": float(gross_profit) - float(total_expenses),
         "low_stock_count": low_stock_count,
+        "top_products": top_products,
+        "sales_chart": list(trend_buckets.values()),
     }
 
 

@@ -1,9 +1,10 @@
 """Sales API endpoints."""
 from __future__ import annotations
 
+from datetime import UTC, date, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -48,15 +49,38 @@ def _sale_eager_options():
 async def list_sales(
     skip: int = 0,
     limit: int = 50,
+    q: str | None = None,
+    search: str | None = None,
+    sale_status: str | None = Query(None, alias="status"),
+    payment_status: str | None = None,
+    cashier_id: UUID | None = None,
+    terminal_id: UUID | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("sale.read")),
 ) -> list[Sale]:
+    stmt = select(Sale).options(*_sale_eager_options())
+    keyword = (q or search or "").strip()
+    if keyword:
+        stmt = stmt.where(Sale.invoice_number.ilike(f"%{keyword}%"))
+    if sale_status:
+        stmt = stmt.where(Sale.sale_status == sale_status.upper())
+    if payment_status:
+        stmt = stmt.where(Sale.payment_status == payment_status.upper())
+    if cashier_id:
+        stmt = stmt.where(Sale.cashier_id == cashier_id)
+    if terminal_id:
+        stmt = stmt.where(Sale.terminal_id == terminal_id)
+    if from_date:
+        start_dt = datetime.combine(from_date, datetime.min.time()).replace(tzinfo=UTC)
+        stmt = stmt.where(Sale.created_at >= start_dt)
+    if to_date:
+        end_dt = datetime.combine(to_date, datetime.max.time()).replace(tzinfo=UTC)
+        stmt = stmt.where(Sale.created_at <= end_dt)
+
     result = await db.execute(
-        select(Sale)
-        .options(*_sale_eager_options())
-        .offset(skip)
-        .limit(limit)
-        .order_by(Sale.created_at.desc())
+        stmt.offset(skip).limit(limit).order_by(Sale.created_at.desc())
     )
     return list(result.scalars().all())
 
@@ -254,11 +278,20 @@ returns_router = APIRouter(prefix="/returns", tags=["Returns"])
 async def list_returns(
     skip: int = 0,
     limit: int = 50,
+    from_date: date | None = None,
+    to_date: date | None = None,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("sale.refund")),
 ) -> list[Return]:
+    stmt = select(Return)
+    if from_date:
+        start_dt = datetime.combine(from_date, datetime.min.time()).replace(tzinfo=UTC)
+        stmt = stmt.where(Return.created_at >= start_dt)
+    if to_date:
+        end_dt = datetime.combine(to_date, datetime.max.time()).replace(tzinfo=UTC)
+        stmt = stmt.where(Return.created_at <= end_dt)
     result = await db.execute(
-        select(Return).offset(skip).limit(limit).order_by(Return.created_at.desc())
+        stmt.offset(skip).limit(limit).order_by(Return.created_at.desc())
     )
     return list(result.scalars().all())
 
