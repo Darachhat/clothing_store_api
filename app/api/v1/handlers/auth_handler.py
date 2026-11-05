@@ -20,6 +20,8 @@ from app.schemas.auth_schema import (
     REFRESH_REQUEST_SCHEMA,
     SYSTEM_CLIENT_CREATE_SCHEMA,
     SYSTEM_CLIENT_RESPONSE_SCHEMA,
+    TELEGRAM_APP_CHALLENGE_RESPONSE_SCHEMA,
+    TELEGRAM_APP_STATUS_RESPONSE_SCHEMA,
     TELEGRAM_AUTH_PAYLOAD_SCHEMA,
     TELEGRAM_CONFIG_RESPONSE_SCHEMA,
     TELEGRAM_STATUS_RESPONSE_SCHEMA,
@@ -153,6 +155,41 @@ async def login_with_telegram(
     result = await service.login_with_telegram(body.model_dump(exclude_none=True), request=request)
     set_session_cookies(response, result["access_token"], result["refresh_token"])
     return LOGIN_RESPONSE_SCHEMA(**result)
+
+
+@router.post("/telegram/app-challenge", response_model=TELEGRAM_APP_CHALLENGE_RESPONSE_SCHEMA)
+async def create_telegram_app_challenge(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_async_db)],
+) -> TELEGRAM_APP_CHALLENGE_RESPONSE_SCHEMA:
+    service = AUTH_SERVICE(db)
+    res = await service.create_telegram_app_challenge(mode="login", request=request)
+    return TELEGRAM_APP_CHALLENGE_RESPONSE_SCHEMA(**res)
+
+
+@router.post("/telegram/app-link-challenge", response_model=TELEGRAM_APP_CHALLENGE_RESPONSE_SCHEMA)
+async def create_telegram_app_link_challenge(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_async_db)],
+) -> TELEGRAM_APP_CHALLENGE_RESPONSE_SCHEMA:
+    service = AUTH_SERVICE(db)
+    res = await service.create_telegram_app_challenge(mode="link", current_user=current_user, request=request)
+    return TELEGRAM_APP_CHALLENGE_RESPONSE_SCHEMA(**res)
+
+
+@router.get("/telegram/app-status/{challenge_token}", response_model=TELEGRAM_APP_STATUS_RESPONSE_SCHEMA)
+async def get_telegram_app_challenge_status(
+    challenge_token: str,
+    request: Request,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_async_db)],
+) -> TELEGRAM_APP_STATUS_RESPONSE_SCHEMA:
+    service = AUTH_SERVICE(db)
+    res = await service.check_telegram_app_challenge(challenge_token, request=request)
+    if res.get("status") == "APPROVED" and res.get("access_token") and res.get("refresh_token"):
+        set_session_cookies(response, res["access_token"], res["refresh_token"])
+    return TELEGRAM_APP_STATUS_RESPONSE_SCHEMA(**res)
 
 
 @router.post("/telegram/link", response_model=USER_RESPONSE_SCHEMA)

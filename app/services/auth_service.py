@@ -57,6 +57,7 @@ logger = get_logger(__name__)
 _RATE_LIMIT_BUCKETS: dict[str, list[float]] = defaultdict(list)
 RATE_LIMIT_MAX_REQUESTS = 15
 RATE_LIMIT_WINDOW_SECONDS = 60
+_LAST_TELEGRAM_UPDATE_OFFSET: int = 0
 
 
 def reset_rate_limits() -> None:
@@ -504,6 +505,412 @@ class AUTH_SERVICE:
         )
         await self.db.commit()
         return await self.user_repo.get_by_id(current_user.id)
+
+    # ── Telegram App Deep-Link Login (tg://resolve?domain=...&start=login_...) ─
+
+    async def create_telegram_app_challenge(
+        self,
+        *,
+        mode         : str = "login",
+        current_user : Optional[User] = None,
+        request      : Optional[Request] = None,
+    ) -> Dict[str, Any]:
+        token, bot_username = await self._resolve_telegram_bot_credentials()
+        if not token or not bot_username:
+            raise BAD_REQUEST_EXCEPTION("Telegram bot is not configured")
+
+        clean_username = bot_username.lstrip("@")
+        challenge_token = secrets.token_hex(16)
+        prefix = "app_link" if mode == "link" else "app_login"
+        start_param = f"link_{challenge_token}" if mode == "link" else f"login_{challenge_token}"
+        expires_in = 300
+
+        row = TELEGRAM_AUTH_REPLAY_MODEL(
+            auth_hash   = f"{prefix}:{challenge_token}",
+            telegram_id = "PENDING",
+            auth_date   = int(datetime.now(UTC).timestamp()),
+            expires_at  = datetime.now(UTC) + timedelta(seconds=expires_in),
+            status_code = "PENDING",
+            created_by  = str(current_user.id) if current_user else None,
+        )
+        self.db.add(row)
+        await self.db.commit()
+
+        return {
+            "challenge_token"    : challenge_token,
+            "bot_username"       : clean_username,
+            "tg_app_url"         : f"tg://resolve?domain={clean_username}&start={start_param}",
+            "tg_web_url"         : f"https://t.me/{clean_username}?start={start_param}",
+            "expires_in_seconds" : expires_in,
+        }
+
+    @staticmethod
+    async def _send_telegram_bot_message(
+        token        : str,
+        chat_id      : int | str,
+        text         : str,
+        reply_markup : Optional[Dict[str, Any]] = None,
+    ) -> None:
+        import httpx
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload: Dict[str, Any] = {
+            "chat_id": chat_id,
+            "text": text,
+        }
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                await client.post(url, json=payload)
+        except Exception as exc:
+            logger.warning(f"Failed to send Telegram bot message to chat {chat_id}: {exc}")
+
+    async def _sync_telegram_bot_updates(
+        self,
+        token                : str,
+        auto_create_customer : bool = False,
+    ) -> None:
+        global _LAST_TELEGRAM_UPDATE_OFFSET
+        import httpx
+        import uuid as _uuid
+
+        url = f"https://api.telegram.org/bot{token}/getUpdates"
+        params: Dict[str, Any] = {
+            "timeout": 0,
+            "allowed_updates": '["message"]',
+        }
+        if _LAST_TELEGRAM_UPDATE_OFFSET > 0:
+            params["offset"] = _LAST_TELEGRAM_UPDATE_OFFSET
+
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(url, params=params)
+                if resp.status_code != 200:
+                    return
+                data = resp.json()
+        except Exception as exc:
+            logger.warning(f"Telegram getUpdates polling error: {exc}")
+            return
+
+        if not data.get("ok"):
+            return
+
+        updates = data.get("result") or []
+        now = datetime.now(UTC)
+
+        for upd in updates:
+            update_id = upd.get("update_id", 0)
+            if update_id >= _LAST_TELEGRAM_UPDATE_OFFSET:
+                _LAST_TELEGRAM_UPDATE_OFFSET = update_id + 1
+
+            msg = upd.get("message")
+            if not msg:
+                continue
+
+            from_user = msg.get("from") or {}
+            tg_id = str(from_user.get("id") or "").strip()
+            if not tg_id:
+                continue
+            tg_username = from_user.get("username")
+            first_name = from_user.get("first_name") or ""
+            last_name = from_user.get("last_name") or ""
+            chat_id = (msg.get("chat") or {}).get("id") or tg_id
+            text = (msg.get("text") or "").strip()
+
+            # 1. Handle /start login_<token> or /start link_<token>
+            if text.startswith("/start "):
+                arg = text.split(" ", 1)[1].strip()
+                if arg.startswith("login_"):
+                    c_token = arg[len("login_"):]
+                    stmt = select(TELEGRAM_AUTH_REPLAY_MODEL).where(
+                        TELEGRAM_AUTH_REPLAY_MODEL.auth_hash == f"app_login:{c_token}",
+                        TELEGRAM_AUTH_REPLAY_MODEL.expires_at > now,
+                    )
+                    c_row = (await self.db.execute(stmt)).scalar_one_or_none()
+                    if not c_row or c_row.status_code not in ("PENDING", "AWAITING_PHONE"):
+                        await self._send_telegram_bot_message(
+                            token,
+                            chat_id,
+                            "This login session has expired or was already used. Please click 'Log in with Telegram' on the website again.",
+                            reply_markup={"remove_keyboard": True},
+                        )
+                        continue
+
+                    existing_user = await self.user_repo.get_by_telegram_id(tg_id)
+                    if existing_user:
+                        if tg_username:
+                            existing_user.telegram_username = tg_username
+                        c_row.telegram_id = tg_id
+                        c_row.updated_by = tg_username
+                        c_row.status_code = "APPROVED"
+                        await self.db.commit()
+                        await self._send_telegram_bot_message(
+                            token,
+                            chat_id,
+                            f"✅ Login confirmed for @{existing_user.username} ({existing_user.full_name})!\n\nYou can now return to your browser.",
+                            reply_markup={"remove_keyboard": True},
+                        )
+                    else:
+                        c_row.telegram_id = f"CHAT:{tg_id}"
+                        c_row.updated_by = tg_username
+                        c_row.status_code = "AWAITING_PHONE"
+                        await self.db.commit()
+                        await self._send_telegram_bot_message(
+                            token,
+                            chat_id,
+                            "👋 Welcome to Clothing Store!\n\nTo link your account and sign in, tap the button below to share your verified Telegram phone number:",
+                            reply_markup={
+                                "keyboard": [[{"text": "📱 Share Phone Number to Link & Sign In", "request_contact": True}]],
+                                "resize_keyboard": True,
+                                "one_time_keyboard": True,
+                            },
+                        )
+
+                elif arg.startswith("link_"):
+                    c_token = arg[len("link_"):]
+                    stmt = select(TELEGRAM_AUTH_REPLAY_MODEL).where(
+                        TELEGRAM_AUTH_REPLAY_MODEL.auth_hash == f"app_link:{c_token}",
+                        TELEGRAM_AUTH_REPLAY_MODEL.expires_at > now,
+                    )
+                    c_row = (await self.db.execute(stmt)).scalar_one_or_none()
+                    if not c_row or c_row.status_code != "PENDING" or not c_row.created_by:
+                        await self._send_telegram_bot_message(
+                            token,
+                            chat_id,
+                            "This account-linking request has expired. Please try again from your account settings.",
+                            reply_markup={"remove_keyboard": True},
+                        )
+                        continue
+
+                    target_user = await self.user_repo.get_by_id(_uuid.UUID(c_row.created_by))
+                    if not target_user:
+                        continue
+
+                    if await self.user_repo.telegram_id_exists(tg_id, exclude_user_id=target_user.id):
+                        c_row.status_code = "REJECTED"
+                        c_row.updated_by = "This Telegram account is already linked to another user."
+                        await self.db.commit()
+                        await self._send_telegram_bot_message(
+                            token,
+                            chat_id,
+                            "❌ This Telegram account is already linked to another user account.",
+                            reply_markup={"remove_keyboard": True},
+                        )
+                        continue
+
+                    target_user.telegram_id = tg_id
+                    target_user.telegram_username = tg_username
+                    target_user.telegram_linked_at = now
+                    c_row.telegram_id = tg_id
+                    c_row.updated_by = tg_username
+                    c_row.status_code = "APPROVED"
+                    await self.db.commit()
+                    await self._send_telegram_bot_message(
+                        token,
+                        chat_id,
+                        f"✅ Your Telegram account is now linked to @{target_user.username} ({target_user.full_name})!\n\nYou can return to your browser.",
+                        reply_markup={"remove_keyboard": True},
+                    )
+
+            # 2. Handle shared contact (request_contact=True) to verify phone & link account
+            contact = msg.get("contact")
+            if contact:
+                contact_user_id = str(contact.get("user_id") or "").strip()
+                raw_phone = str(contact.get("phone_number") or "").strip()
+                if contact_user_id != tg_id or not raw_phone:
+                    await self._send_telegram_bot_message(
+                        token,
+                        chat_id,
+                        "❌ Please use the 'Share Phone Number' button to share your own verified Telegram contact.",
+                    )
+                    continue
+
+                try:
+                    normalized_phone = normalize_phone_number(raw_phone)
+                except ValueError:
+                    normalized_phone = None
+
+                # Find any pending AWAITING_PHONE challenge for this Telegram user
+                pending_stmt = (
+                    select(TELEGRAM_AUTH_REPLAY_MODEL)
+                    .where(
+                        TELEGRAM_AUTH_REPLAY_MODEL.telegram_id == f"CHAT:{tg_id}",
+                        TELEGRAM_AUTH_REPLAY_MODEL.status_code == "AWAITING_PHONE",
+                        TELEGRAM_AUTH_REPLAY_MODEL.expires_at > now,
+                    )
+                    .order_by(TELEGRAM_AUTH_REPLAY_MODEL.created_datetime.desc())
+                )
+                pending_rows = (await self.db.execute(pending_stmt)).scalars().all()
+                if not pending_rows:
+                    continue
+
+                matched_user = await self.user_repo.get_by_phone_number(normalized_phone) if normalized_phone else None
+                if not matched_user and auto_create_customer and normalized_phone:
+                    from app.models import Role
+                    role_res = await self.db.execute(select(Role).where(Role.name == "CUSTOMER"))
+                    customer_role = role_res.scalar_one_or_none()
+                    if not customer_role:
+                        customer_role = Role(name="CUSTOMER", description="Web store customer", is_system=True)
+                        self.db.add(customer_role)
+                        await self.db.flush()
+
+                    base_username = tg_username or f"tg_{tg_id}"
+                    candidate_username = base_username
+                    if await self.user_repo.get_by_username(candidate_username):
+                        candidate_username = f"tg_{tg_id}"
+                    full_name = " ".join([p for p in (first_name, last_name) if p]) or candidate_username
+
+                    matched_user = User(
+                        username           = candidate_username,
+                        email              = f"tg_{tg_id}@telegram.local",
+                        full_name          = full_name,
+                        hashed_password    = "!telegram_only",
+                        phone_number       = normalized_phone,
+                        phone_verified_at  = now,
+                        telegram_id        = tg_id,
+                        telegram_username  = tg_username,
+                        telegram_linked_at = now,
+                        status             = COMMON_STATUS_ENUM.ACTIVE.value,
+                        roles              = [customer_role],
+                    )
+                    self.db.add(matched_user)
+                    await self.db.flush()
+
+                if matched_user:
+                    matched_user.telegram_id = tg_id
+                    if tg_username:
+                        matched_user.telegram_username = tg_username
+                    matched_user.telegram_linked_at = now
+                    if not matched_user.phone_verified_at:
+                        matched_user.phone_verified_at = now
+
+                    for r in pending_rows:
+                        r.telegram_id = tg_id
+                        r.updated_by = tg_username
+                        r.status_code = "APPROVED"
+
+                    from app.services.audit_service import AUDIT_SERVICE
+                    await AUDIT_SERVICE.record(
+                        self.db,
+                        action      = "USER_TELEGRAM_LINKED",
+                        entity_type = "user",
+                        entity_id   = matched_user.id,
+                        user_id     = matched_user.id,
+                        new_data    = {
+                            "telegram_id": tg_id,
+                            "telegram_username": tg_username,
+                            "verified_phone": normalized_phone,
+                            "method": "telegram_app_contact_share",
+                        },
+                    )
+                    await self.db.commit()
+                    await self._send_telegram_bot_message(
+                        token,
+                        chat_id,
+                        f"✅ Phone {normalized_phone} verified and linked to @{matched_user.username} ({matched_user.full_name})!\n\nYou are now signed in — return to your browser.",
+                        reply_markup={"remove_keyboard": True},
+                    )
+                else:
+                    for r in pending_rows:
+                        r.status_code = "REJECTED"
+                        r.updated_by = f"No account found matching phone {normalized_phone or raw_phone}"
+                    await self.db.commit()
+                    await self._send_telegram_bot_message(
+                        token,
+                        chat_id,
+                        f"❌ No existing account was found matching phone number {normalized_phone or raw_phone}. Please sign in with your username/password first and link Telegram in your account settings.",
+                        reply_markup={"remove_keyboard": True},
+                    )
+
+    async def check_telegram_app_challenge(
+        self,
+        challenge_token      : str,
+        *,
+        request              : Optional[Request] = None,
+        required_role        : Optional[str] = None,
+        auto_create_customer : bool = False,
+    ) -> Dict[str, Any]:
+        token, _ = await self._resolve_telegram_bot_credentials()
+        if token:
+            await self._sync_telegram_bot_updates(token, auto_create_customer=auto_create_customer)
+
+        stmt = select(TELEGRAM_AUTH_REPLAY_MODEL).where(
+            TELEGRAM_AUTH_REPLAY_MODEL.auth_hash.in_([
+                f"app_login:{challenge_token}",
+                f"app_link:{challenge_token}",
+            ])
+        )
+        row = (await self.db.execute(stmt)).scalar_one_or_none()
+        if not row:
+            raise NOT_FOUND_EXCEPTION("Telegram login challenge not found")
+
+        now = datetime.now(UTC)
+        exp = row.expires_at if row.expires_at.tzinfo else row.expires_at.replace(tzinfo=UTC)
+        if exp <= now and row.status_code in ("PENDING", "AWAITING_PHONE"):
+            row.status_code = "EXPIRED"
+            await self.db.commit()
+            return {"status": "EXPIRED", "message": "Telegram login session expired. Please try again."}
+
+        if row.status_code == "PENDING":
+            return {
+                "status": "PENDING",
+                "message": "Waiting for you to tap 'Start' in the Telegram app...",
+            }
+
+        if row.status_code == "AWAITING_PHONE":
+            return {
+                "status": "AWAITING_PHONE",
+                "message": "Tap 'Share Phone Number to Link & Sign In' inside the Telegram app to verify your account...",
+            }
+
+        if row.status_code == "REJECTED":
+            return {
+                "status": "REJECTED",
+                "message": row.updated_by or "Telegram login was declined.",
+            }
+
+        if row.status_code == "APPROVED":
+            user = await self.user_repo.get_by_telegram_id(row.telegram_id)
+            if not user:
+                row.status_code = "REJECTED"
+                await self.db.commit()
+                return {"status": "REJECTED", "message": "Linked user account not found."}
+
+            if user.status != COMMON_STATUS_ENUM.ACTIVE.value:
+                row.status_code = "REJECTED"
+                await self.db.commit()
+                raise FORBIDDEN_EXCEPTION("Account is not active")
+
+            if required_role:
+                role_names = {r.name for r in (user.roles or [])}
+                if required_role not in role_names:
+                    row.status_code = "REJECTED"
+                    await self.db.commit()
+                    raise FORBIDDEN_EXCEPTION("This account does not have permission for this portal")
+
+            row.status_code = "CONSUMED"
+            await self.db.flush()
+
+            tokens = await self._issue_tokens_for_user(
+                user,
+                action="USER_TELEGRAM_LOGIN",
+                request=request,
+                extra_audit_data={
+                    "telegram_id": user.telegram_id,
+                    "telegram_username": user.telegram_username,
+                    "method": "telegram_app_deeplink",
+                },
+            )
+            return {
+                "status"        : "APPROVED",
+                "message"       : "Authenticated via Telegram app",
+                "access_token"  : tokens["access_token"],
+                "refresh_token" : tokens["refresh_token"],
+                "token_type"    : tokens["token_type"],
+                "user"          : tokens["user"],
+            }
+
+        return {"status": row.status_code, "message": "Session already completed."}
 
     # ── Verified Phone Number Linking ─────────────────────────────────────────
 

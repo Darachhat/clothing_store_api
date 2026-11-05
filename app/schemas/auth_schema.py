@@ -354,6 +354,23 @@ class TELEGRAM_STATUS_RESPONSE_SCHEMA(BaseModel):
     telegram_linked_at   : Optional[datetime] = None
 
 
+class TELEGRAM_APP_CHALLENGE_RESPONSE_SCHEMA(BaseModel):
+    challenge_token    : str
+    bot_username       : str
+    tg_app_url         : str
+    tg_web_url         : str
+    expires_in_seconds : int = 300
+
+
+class TELEGRAM_APP_STATUS_RESPONSE_SCHEMA(BaseModel):
+    status        : str
+    message       : Optional[str]                  = None
+    access_token  : Optional[str]                  = None
+    refresh_token : Optional[str]                  = None
+    token_type    : str                            = "bearer"
+    user          : Optional[USER_RESPONSE_SCHEMA] = None
+
+
 class PHONE_VERIFICATION_REQUEST_SCHEMA(BaseModel):
     phone_number : str = Field(..., min_length=6, max_length=32)
 
@@ -443,6 +460,8 @@ __all__ = [
     "TELEGRAM_AUTH_PAYLOAD_SCHEMA",
     "TELEGRAM_CONFIG_RESPONSE_SCHEMA",
     "TELEGRAM_STATUS_RESPONSE_SCHEMA",
+    "TELEGRAM_APP_CHALLENGE_RESPONSE_SCHEMA",
+    "TELEGRAM_APP_STATUS_RESPONSE_SCHEMA",
     "PHONE_VERIFICATION_REQUEST_SCHEMA",
     "PHONE_VERIFICATION_CHALLENGE_RESPONSE_SCHEMA",
     "PHONE_VERIFY_CONFIRM_SCHEMA",
