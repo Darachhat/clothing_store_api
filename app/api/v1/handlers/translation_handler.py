@@ -39,3 +39,4 @@ async def reseed_translations(
     """Re-seed standard translation keys into base_data.translate and warm cache."""
     count = await TRANSLATION_CACHE.seed_translations(db=db)
     return {"status": "success", "seeded_count": count}
+

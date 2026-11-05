@@ -1030,3 +1030,4 @@ class TranslationCacheService:
 
 
 TRANSLATION_CACHE = TranslationCacheService
+
