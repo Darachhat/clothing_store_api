@@ -165,9 +165,13 @@ class SETTINGS(BaseSettings):
     PAYWAY_CALLBACK_BASE_URL        : str                                           = ""
     PAYWAY_QR_LIFETIME_MINUTES      : int                                           = 10
 
-    # ── Telegram Notifications ────────────────────────────────────────────────
+    # ── Telegram Notifications & Authentication ───────────────────────────────
     TELEGRAM_BOT_TOKEN              : str                                           = ""
+    TELEGRAM_BOT_USERNAME           : str                                           = ""
     TELEGRAM_GROUP_ID               : str                                           = ""
+    TELEGRAM_AUTH_MAX_AGE_SECONDS   : int                                           = 300
+    PHONE_OTP_EXPIRE_MINUTES        : int                                           = 10
+    PHONE_OTP_MAX_ATTEMPTS          : int                                           = 5
 
 
 Settings = SETTINGS

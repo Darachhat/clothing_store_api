@@ -19,10 +19,12 @@ from app.models.auth_schema_model import (  # noqa: F401
     CREDENTIAL_BASIC_MODEL,
     CREDENTIAL_BEARER_MODEL,
     CREDENTIAL_OAUTH2_MODEL,
+    PHONE_VERIFICATION_MODEL,
     SYSTEM_CLIENT_MODEL,
     SYSTEM_CREDENTIAL_MODEL,
     SYSTEM_ENDPOINT_MODEL,
     SYSTEM_MODEL,
+    TELEGRAM_AUTH_REPLAY_MODEL,
     TELEGRAM_BOT_MODEL,
     TELEGRAM_CHAT_MODEL,
 )
@@ -130,6 +132,8 @@ Expense             = EXPENSE_MODEL
 Promotion           = PROMOTION_MODEL
 AuditLog            = AUDIT_LOG_MODEL
 NotificationSetting = NOTIFICATION_SETTING_MODEL
+TelegramAuthReplay  = TELEGRAM_AUTH_REPLAY_MODEL
+PhoneVerification   = PHONE_VERIFICATION_MODEL
 
 # Declarative class registry bindings for string references
 for _alias, _model in [
@@ -188,6 +192,10 @@ __all__ = [
     "CREDENTIAL_OAUTH2_MODEL",
     "TELEGRAM_BOT_MODEL",
     "TELEGRAM_CHAT_MODEL",
+    "TELEGRAM_AUTH_REPLAY_MODEL",
+    "TelegramAuthReplay",
+    "PHONE_VERIFICATION_MODEL",
+    "PhoneVerification",
     "SYSTEM_ENDPOINT_MODEL",
     "TRANSLATE_MODEL",
     "STATUS_MODEL",

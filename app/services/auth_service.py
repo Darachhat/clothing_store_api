@@ -1,105 +1,147 @@
-"""Authentication service: user JWT auth (login, logout, refresh, change password) & system client API key auth."""
+"""Authentication service: user JWT auth (login, logout, refresh, change password, Telegram login, phone verification) & system client API key auth."""
 from __future__ import annotations
 
-import hashlib
 from datetime import UTC, datetime, timedelta, timezone
+import hashlib
+import hmac
+import secrets
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Request
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.enum.common_enum import (
-    COMMON_STATUS_ENUM
-    , STATUS_CODE_ENUM
-)
+from app.core.enum.common_enum import COMMON_STATUS_ENUM, STATUS_CODE_ENUM
 from app.core.exceptions import (
-    BAD_REQUEST_EXCEPTION
-    , FORBIDDEN_EXCEPTION
-    , NOT_FOUND_EXCEPTION
-    , UNAUTHORIZED_EXCEPTION
+    BAD_REQUEST_EXCEPTION,
+    CONFLICT_EXCEPTION,
+    FORBIDDEN_EXCEPTION,
+    NOT_FOUND_EXCEPTION,
+    UNAUTHORIZED_EXCEPTION,
 )
 from app.core.logging import get_logger
 from app.core.security import (
-    create_access_token
-    , create_refresh_token
-    , hash_password
-    , verify_password
+    create_access_token,
+    create_refresh_token,
+    hash_password,
+    verify_password,
 )
 from app.core.utils.crypto_utils import generate_api_key, hash_api_key
-from app.models import RefreshToken, User
-from app.models import SYSTEM_CLIENT_MODEL
+from app.core.utils.phone_utils import normalize_phone_number
+from app.core.utils.telegram_auth import verify_telegram_login_data
+from app.models import (
+    PHONE_VERIFICATION_MODEL,
+    SYSTEM_CLIENT_MODEL,
+    TELEGRAM_AUTH_REPLAY_MODEL,
+    TELEGRAM_BOT_MODEL,
+    RefreshToken,
+    User,
+)
 from app.repositories.user_repository import RefreshTokenRepository, UserRepository
 from app.schemas.auth_schema import (
-    CHANGE_PASSWORD_REQUEST_SCHEMA
-    , LOGIN_REQUEST_SCHEMA
-    , LOGOUT_REQUEST_SCHEMA
-    , REFRESH_REQUEST_SCHEMA
-    , SYSTEM_CLIENT_CREATE_SCHEMA
-    , SYSTEM_CLIENT_RESPONSE_SCHEMA
+    CHANGE_PASSWORD_REQUEST_SCHEMA,
+    LOGIN_REQUEST_SCHEMA,
+    LOGOUT_REQUEST_SCHEMA,
+    REFRESH_REQUEST_SCHEMA,
+    SYSTEM_CLIENT_CREATE_SCHEMA,
+    SYSTEM_CLIENT_RESPONSE_SCHEMA,
 )
 
 logger = get_logger(__name__)
 
 
 class AUTH_SERVICE:
-    """Service orchestrating User RBAC JWT credential issuance and System Client API keys."""
+    """Service orchestrating User RBAC JWT credential issuance, Telegram Auth, Phone Linking, and System Client API keys."""
 
     def __init__(self, db: AsyncSession) -> None:
         self.db         = db
         self.user_repo  = UserRepository(db)
         self.token_repo = RefreshTokenRepository(db)
 
-    # ── User JWT Authentication (Clothing Store RBAC) ─────────────────────────
+    # ── Token Issuance Helper ─────────────────────────────────────────────────
 
-    async def login(
-        self
-        , username : str
-        , password : str
-        , request  : Optional[Request] = None
+    async def _issue_tokens_for_user(
+        self,
+        user: User,
+        *,
+        action: str = "USER_LOGIN",
+        request: Optional[Request] = None,
+        extra_audit_data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        user = await self.user_repo.get_by_username(username)
-        if not user or not verify_password(password, user.hashed_password):
-            raise UNAUTHORIZED_EXCEPTION("Invalid username or password")
-
-        if user.status != COMMON_STATUS_ENUM.ACTIVE.value:
-            raise FORBIDDEN_EXCEPTION("Account is not active")
-
         user.last_login_at = datetime.now(UTC)
 
         access_token  = create_access_token(str(user.id))
         refresh_token = create_refresh_token(str(user.id))
         token_hash    = hashlib.sha256(refresh_token.encode()).hexdigest()
 
+        ip_addr    = request.client.host if request and request.client else None
+        user_agent = request.headers.get("user-agent") if request else None
+
         rt = RefreshToken(
-            user_id      = user.id
-            , token_hash = token_hash
-            , expires_at = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-            , ip_address = request.client.host if request and request.client else None
-            , user_agent = request.headers.get("user-agent") if request else None
+            user_id    = user.id,
+            token_hash = token_hash,
+            expires_at = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            ip_address = ip_addr,
+            user_agent = user_agent,
         )
         self.db.add(rt)
+
+        audit_payload = {"username": user.username}
+        if extra_audit_data:
+            audit_payload.update(extra_audit_data)
+
         from app.services.audit_service import AUDIT_SERVICE
         await AUDIT_SERVICE.record(
-            self.db
-            , action      = "USER_LOGIN"
-            , entity_type = "user"
-            , entity_id   = user.id
-            , user_id     = user.id
-            , ip_address  = rt.ip_address
-            , user_agent  = rt.user_agent
-            , new_data    = {"username": user.username}
+            self.db,
+            action      = action,
+            entity_type = "user",
+            entity_id   = user.id,
+            user_id     = user.id,
+            ip_address  = ip_addr,
+            user_agent  = user_agent,
+            new_data    = audit_payload,
         )
         await self.db.commit()
-        await self.db.refresh(user)
+        refreshed = await self.user_repo.get_by_id(user.id)
 
         return {
-            "access_token"    : access_token
-            , "refresh_token" : refresh_token
-            , "token_type"    : "bearer"
-            , "user"          : user
+            "access_token"  : access_token,
+            "refresh_token" : refresh_token,
+            "token_type"    : "bearer",
+            "user"          : refreshed or user,
         }
+
+    # ── User JWT Authentication (Clothing Store RBAC) ─────────────────────────
+
+    async def login(
+        self,
+        username : str,
+        password : str,
+        request  : Optional[Request] = None,
+    ) -> Dict[str, Any]:
+        identifier = username.strip()
+        user = await self.user_repo.get_by_username(identifier)
+        if not user and "@" in identifier:
+            user = await self.user_repo.get_by_email(identifier.lower())
+        if not user:
+            try:
+                norm_phone = normalize_phone_number(identifier)
+                if norm_phone:
+                    candidate = await self.user_repo.get_by_phone_number(norm_phone)
+                    if candidate and candidate.phone_verified:
+                        user = candidate
+            except ValueError:
+                pass
+
+        if not user or not verify_password(password, user.hashed_password):
+            raise UNAUTHORIZED_EXCEPTION("Invalid username or password")
+
+        if user.status != COMMON_STATUS_ENUM.ACTIVE.value:
+            raise FORBIDDEN_EXCEPTION("Account is not active")
+
+        return await self._issue_tokens_for_user(user, action="USER_LOGIN", request=request)
 
     async def refresh(self, refresh_token: str) -> Dict[str, Any]:
         token_hash = hashlib.sha256(refresh_token.encode()).hexdigest()
@@ -121,17 +163,17 @@ class AUTH_SERVICE:
         new_hash    = hashlib.sha256(new_refresh.encode()).hexdigest()
 
         new_rt = RefreshToken(
-            user_id      = user.id
-            , token_hash = new_hash
-            , expires_at = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+            user_id    = user.id,
+            token_hash = new_hash,
+            expires_at = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         )
         self.db.add(new_rt)
         await self.db.commit()
 
         return {
-            "access_token"    : new_access
-            , "refresh_token" : new_refresh
-            , "token_type"    : "bearer"
+            "access_token"  : new_access,
+            "refresh_token" : new_refresh,
+            "token_type"    : "bearer",
         }
 
     async def logout(self, refresh_token: str) -> None:
@@ -141,86 +183,419 @@ class AUTH_SERVICE:
             stored.revoked = True
             from app.services.audit_service import AUDIT_SERVICE
             await AUDIT_SERVICE.record(
-                self.db
-                , action      = "USER_LOGOUT"
-                , entity_type = "user"
-                , entity_id   = stored.user_id
-                , user_id     = stored.user_id
-                , new_data    = {"revoked_token_id": str(stored.id)}
+                self.db,
+                action      = "USER_LOGOUT",
+                entity_type = "user",
+                entity_id   = stored.user_id,
+                user_id     = stored.user_id,
+                new_data    = {"revoked_token_id": str(stored.id)},
             )
             await self.db.commit()
 
     async def change_password(
-        self
-        , user             : User
-        , current_password : str
-        , new_password     : str
+        self,
+        user             : User,
+        current_password : str,
+        new_password     : str,
     ) -> None:
         if not verify_password(current_password, user.hashed_password):
             raise BAD_REQUEST_EXCEPTION("Current password is incorrect")
         user.hashed_password = hash_password(new_password)
         from app.services.audit_service import AUDIT_SERVICE
         await AUDIT_SERVICE.record(
-            self.db
-            , action      = "USER_PASSWORD_CHANGED"
-            , entity_type = "user"
-            , entity_id   = user.id
-            , user_id     = user.id
-            , new_data    = {"username": user.username}
+            self.db,
+            action      = "USER_PASSWORD_CHANGED",
+            entity_type = "user",
+            entity_id   = user.id,
+            user_id     = user.id,
+            new_data    = {"username": user.username},
         )
         await self.db.commit()
 
+    # ── Telegram Login & Identity Linking ─────────────────────────────────────
+
+    async def _resolve_telegram_bot_credentials(self) -> Tuple[Optional[str], Optional[str]]:
+        """Resolve active Telegram bot token and public bot username without ever exposing the token."""
+        token = (settings.TELEGRAM_BOT_TOKEN or "").strip() or None
+        bot_username = (settings.TELEGRAM_BOT_USERNAME or "").strip() or None
+
+        stmt = (
+            select(TELEGRAM_BOT_MODEL)
+            .where(
+                TELEGRAM_BOT_MODEL.deleted_datetime.is_(None),
+                TELEGRAM_BOT_MODEL.status_code.in_(["active", "ACTIVE"]),
+            )
+            .order_by(TELEGRAM_BOT_MODEL.created_datetime.desc())
+            .limit(1)
+        )
+        res = await self.db.execute(stmt)
+        bot_row = res.scalar_one_or_none()
+        if bot_row:
+            if not token and bot_row.token:
+                token = bot_row.token.strip()
+            if not bot_username and bot_row.username:
+                bot_username = bot_row.username.strip().lstrip("@")
+
+        return token, bot_username
+
+    async def get_telegram_config(self) -> Dict[str, Any]:
+        token, bot_username = await self._resolve_telegram_bot_credentials()
+        return {
+            "enabled"      : bool(token),
+            "bot_username" : bot_username,
+        }
+
+    async def _verify_and_record_telegram_payload(self, auth_data: Dict[str, Any]) -> Dict[str, Any]:
+        token, _ = await self._resolve_telegram_bot_credentials()
+        if not token:
+            raise BAD_REQUEST_EXCEPTION("Telegram authentication is not configured")
+
+        verified = verify_telegram_login_data(
+            auth_data,
+            token,
+            max_age_seconds=settings.TELEGRAM_AUTH_MAX_AGE_SECONDS,
+        )
+
+        # Replay check against auth.telegram_auth_replays
+        existing_stmt = select(TELEGRAM_AUTH_REPLAY_MODEL.id).where(
+            TELEGRAM_AUTH_REPLAY_MODEL.auth_hash == verified["hash"]
+        )
+        existing_res = await self.db.execute(existing_stmt)
+        if existing_res.scalar_one_or_none() is not None:
+            raise UNAUTHORIZED_EXCEPTION("Telegram authentication data has already been used (replay rejected)")
+
+        replay_entry = TELEGRAM_AUTH_REPLAY_MODEL(
+            auth_hash   = verified["hash"],
+            telegram_id = verified["telegram_id"],
+            auth_date   = verified["auth_date"],
+            expires_at  = datetime.now(UTC) + timedelta(seconds=settings.TELEGRAM_AUTH_MAX_AGE_SECONDS * 2),
+            status_code = "ACTIVE",
+        )
+        self.db.add(replay_entry)
+        await self.db.flush()
+        return verified
+
+    async def login_with_telegram(
+        self,
+        auth_data     : Dict[str, Any],
+        request       : Optional[Request] = None,
+        required_role : Optional[str] = None,
+    ) -> Dict[str, Any]:
+        verified = await self._verify_and_record_telegram_payload(auth_data)
+        user = await self.user_repo.get_by_telegram_id(verified["telegram_id"])
+        if not user:
+            raise UNAUTHORIZED_EXCEPTION(
+                "No user account is linked to this Telegram identity. Please sign in and link your Telegram account first."
+            )
+
+        if user.status != COMMON_STATUS_ENUM.ACTIVE.value:
+            raise FORBIDDEN_EXCEPTION("Account is not active")
+
+        if required_role:
+            role_names = {r.name for r in (user.roles or [])}
+            if required_role not in role_names:
+                raise FORBIDDEN_EXCEPTION("This account does not have permission for this portal")
+
+        # Keep non-authoritative display metadata fresh
+        if verified.get("username"):
+            user.telegram_username = verified["username"]
+        if verified.get("photo_url"):
+            user.telegram_photo_url = verified["photo_url"]
+
+        return await self._issue_tokens_for_user(
+            user,
+            action="USER_TELEGRAM_LOGIN",
+            request=request,
+            extra_audit_data={
+                "telegram_id": verified["telegram_id"],
+                "telegram_username": verified.get("username"),
+            },
+        )
+
+    async def link_telegram_identity(
+        self,
+        current_user : User,
+        auth_data    : Dict[str, Any],
+        request      : Optional[Request] = None,
+    ) -> User:
+        verified = await self._verify_and_record_telegram_payload(auth_data)
+        telegram_id = verified["telegram_id"]
+
+        if await self.user_repo.telegram_id_exists(telegram_id, exclude_user_id=current_user.id):
+            raise CONFLICT_EXCEPTION("This Telegram identity is already linked to another user account")
+
+        old_telegram_id = current_user.telegram_id
+        current_user.telegram_id        = telegram_id
+        current_user.telegram_username  = verified.get("username")
+        current_user.telegram_photo_url = verified.get("photo_url")
+        current_user.telegram_linked_at = datetime.now(UTC)
+
+        from app.services.audit_service import AUDIT_SERVICE
+        await AUDIT_SERVICE.record(
+            self.db,
+            action      = "USER_TELEGRAM_LINKED",
+            entity_type = "user",
+            entity_id   = current_user.id,
+            user_id     = current_user.id,
+            ip_address  = request.client.host if request and request.client else None,
+            user_agent  = request.headers.get("user-agent") if request else None,
+            old_data    = {"telegram_id": old_telegram_id},
+            new_data    = {
+                "telegram_id": telegram_id,
+                "telegram_username": verified.get("username"),
+            },
+        )
+        await self.db.commit()
+        return await self.user_repo.get_by_id(current_user.id)
+
+    async def unlink_telegram_identity(
+        self,
+        current_user : User,
+        request      : Optional[Request] = None,
+    ) -> User:
+        if not current_user.telegram_id:
+            raise BAD_REQUEST_EXCEPTION("No Telegram identity is currently linked to this account")
+
+        old_telegram_id = current_user.telegram_id
+        old_username    = current_user.telegram_username
+        current_user.telegram_id        = None
+        current_user.telegram_username  = None
+        current_user.telegram_photo_url = None
+        current_user.telegram_linked_at = None
+
+        from app.services.audit_service import AUDIT_SERVICE
+        await AUDIT_SERVICE.record(
+            self.db,
+            action      = "USER_TELEGRAM_UNLINKED",
+            entity_type = "user",
+            entity_id   = current_user.id,
+            user_id     = current_user.id,
+            ip_address  = request.client.host if request and request.client else None,
+            user_agent  = request.headers.get("user-agent") if request else None,
+            old_data    = {"telegram_id": old_telegram_id, "telegram_username": old_username},
+            new_data    = {"telegram_id": None},
+        )
+        await self.db.commit()
+        return await self.user_repo.get_by_id(current_user.id)
+
+    # ── Verified Phone Number Linking ─────────────────────────────────────────
+
+    @staticmethod
+    def _hash_phone_otp(user_id: Any, normalized_phone: str, otp_code: str) -> str:
+        payload = f"{user_id}:{normalized_phone}:{otp_code.strip()}"
+        return hmac.new(
+            settings.SECRET_KEY.encode("utf-8"),
+            payload.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+    async def request_phone_verification(
+        self,
+        current_user : User,
+        raw_phone    : str,
+        request      : Optional[Request] = None,
+    ) -> Dict[str, Any]:
+        try:
+            normalized_phone = normalize_phone_number(raw_phone)
+        except ValueError as exc:
+            raise BAD_REQUEST_EXCEPTION(str(exc)) from exc
+
+        if not normalized_phone:
+            raise BAD_REQUEST_EXCEPTION("Phone number is required")
+
+        if await self.user_repo.phone_number_exists(normalized_phone, exclude_user_id=current_user.id):
+            raise CONFLICT_EXCEPTION("Phone number is already linked to another user account")
+
+        # Expire any prior pending challenges for this user
+        await self.db.execute(
+            update(PHONE_VERIFICATION_MODEL)
+            .where(
+                PHONE_VERIFICATION_MODEL.user_id == current_user.id,
+                PHONE_VERIFICATION_MODEL.status_code == "PENDING",
+            )
+            .values(status_code="EXPIRED")
+        )
+
+        otp_code   = f"{secrets.randbelow(900000) + 100000:06d}"
+        otp_hash   = self._hash_phone_otp(current_user.id, normalized_phone, otp_code)
+        expires_in = settings.PHONE_OTP_EXPIRE_MINUTES * 60
+        expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
+
+        challenge = PHONE_VERIFICATION_MODEL(
+            user_id      = current_user.id,
+            phone_number = normalized_phone,
+            otp_hash     = otp_hash,
+            expires_at   = expires_at,
+            attempts     = 0,
+            status_code  = "PENDING",
+        )
+        self.db.add(challenge)
+
+        from app.services.audit_service import AUDIT_SERVICE
+        await AUDIT_SERVICE.record(
+            self.db,
+            action      = "USER_PHONE_VERIFICATION_REQUESTED",
+            entity_type = "user",
+            entity_id   = current_user.id,
+            user_id     = current_user.id,
+            ip_address  = request.client.host if request and request.client else None,
+            user_agent  = request.headers.get("user-agent") if request else None,
+            new_data    = {"phone_number": normalized_phone},
+        )
+        await self.db.commit()
+
+        # Best-effort delivery to user's linked Telegram chat if configured
+        delivery_channel = "verification_challenge"
+        if current_user.telegram_id:
+            token, _ = await self._resolve_telegram_bot_credentials()
+            if token:
+                delivery_channel = "telegram"
+                try:
+                    import httpx
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        await client.post(
+                            f"https://api.telegram.org/bot{token}/sendMessage",
+                            json={
+                                "chat_id": current_user.telegram_id,
+                                "text": (
+                                    f"Phone verification code for {normalized_phone}: {otp_code}\n"
+                                    f"Expires in {settings.PHONE_OTP_EXPIRE_MINUTES} minutes."
+                                ),
+                            },
+                        )
+                except Exception:
+                    logger.warning("Could not deliver OTP via Telegram message; challenge stored in DB.")
+
+        return {
+            "message"            : "Verification code issued. Confirm the OTP to link this phone number.",
+            "normalized_phone"   : normalized_phone,
+            "expires_in_seconds" : expires_in,
+            "delivery_channel"   : delivery_channel,
+        }
+
+    async def verify_and_link_phone(
+        self,
+        current_user : User,
+        raw_phone    : str,
+        otp_code     : str,
+        request      : Optional[Request] = None,
+    ) -> User:
+        try:
+            normalized_phone = normalize_phone_number(raw_phone)
+        except ValueError as exc:
+            raise BAD_REQUEST_EXCEPTION(str(exc)) from exc
+
+        if not normalized_phone:
+            raise BAD_REQUEST_EXCEPTION("Phone number is required")
+
+        if await self.user_repo.phone_number_exists(normalized_phone, exclude_user_id=current_user.id):
+            raise CONFLICT_EXCEPTION("Phone number is already linked to another user account")
+
+        stmt = (
+            select(PHONE_VERIFICATION_MODEL)
+            .where(
+                PHONE_VERIFICATION_MODEL.user_id == current_user.id,
+                PHONE_VERIFICATION_MODEL.phone_number == normalized_phone,
+                PHONE_VERIFICATION_MODEL.status_code == "PENDING",
+            )
+            .order_by(PHONE_VERIFICATION_MODEL.created_datetime.desc())
+            .limit(1)
+        )
+        res = await self.db.execute(stmt)
+        challenge = res.scalar_one_or_none()
+
+        if not challenge:
+            raise BAD_REQUEST_EXCEPTION("No pending verification challenge found for this phone number")
+
+        if challenge.expires_at.replace(tzinfo=UTC) < datetime.now(UTC):
+            challenge.status_code = "EXPIRED"
+            await self.db.commit()
+            raise BAD_REQUEST_EXCEPTION("Phone verification code has expired")
+
+        if challenge.attempts >= settings.PHONE_OTP_MAX_ATTEMPTS:
+            challenge.status_code = "LOCKED"
+            await self.db.commit()
+            raise BAD_REQUEST_EXCEPTION("Maximum verification attempts exceeded. Please request a new code.")
+
+        challenge.attempts += 1
+        expected_hash = self._hash_phone_otp(current_user.id, normalized_phone, otp_code)
+        if not hmac.compare_digest(expected_hash, challenge.otp_hash):
+            await self.db.commit()
+            raise BAD_REQUEST_EXCEPTION("Invalid phone verification code")
+
+        now = datetime.now(UTC)
+        challenge.status_code = "VERIFIED"
+        challenge.verified_at = now
+
+        old_phone = current_user.phone_number
+        current_user.phone_number      = normalized_phone
+        current_user.phone_verified_at = now
+
+        from app.services.audit_service import AUDIT_SERVICE
+        await AUDIT_SERVICE.record(
+            self.db,
+            action      = "USER_PHONE_LINKED",
+            entity_type = "user",
+            entity_id   = current_user.id,
+            user_id     = current_user.id,
+            ip_address  = request.client.host if request and request.client else None,
+            user_agent  = request.headers.get("user-agent") if request else None,
+            old_data    = {"phone_number": old_phone},
+            new_data    = {"phone_number": normalized_phone, "phone_verified": True},
+        )
+        await self.db.commit()
+        return await self.user_repo.get_by_id(current_user.id)
+
     async def login_payload(
-        self
-        , payload : LOGIN_REQUEST_SCHEMA
-        , request : Optional[Request] = None
+        self,
+        payload : LOGIN_REQUEST_SCHEMA,
+        request : Optional[Request] = None,
     ) -> Dict[str, Any]:
         """Authenticate user using structured LOGIN_REQUEST_SCHEMA."""
         return await self.login(
-            username = payload.username
-            , password = payload.password
-            , request  = request
+            username = payload.username,
+            password = payload.password,
+            request  = request,
         )
 
     async def refresh_payload(
-        self
-        , payload : REFRESH_REQUEST_SCHEMA
+        self,
+        payload : REFRESH_REQUEST_SCHEMA,
     ) -> Dict[str, Any]:
         """Refresh JWT tokens using structured REFRESH_REQUEST_SCHEMA."""
         return await self.refresh(refresh_token=payload.refresh_token)
 
     async def logout_payload(
-        self
-        , payload : LOGOUT_REQUEST_SCHEMA
+        self,
+        payload : LOGOUT_REQUEST_SCHEMA,
     ) -> None:
         """Revoke refresh token using structured LOGOUT_REQUEST_SCHEMA."""
         await self.logout(refresh_token=payload.refresh_token)
 
     async def change_password_payload(
-        self
-        , user    : User
-        , payload : CHANGE_PASSWORD_REQUEST_SCHEMA
+        self,
+        user    : User,
+        payload : CHANGE_PASSWORD_REQUEST_SCHEMA,
     ) -> None:
         """Update user password using structured CHANGE_PASSWORD_REQUEST_SCHEMA."""
         await self.change_password(
-            user             = user
-            , current_password = payload.current_password
-            , new_password     = payload.new_password
+            user             = user,
+            current_password = payload.current_password,
+            new_password     = payload.new_password,
         )
-
 
     # ── System Client API Key Authentication (Enterprise Template) ────────────
 
     @staticmethod
     def create_system_client(
-        db     : Session
-        , data : SYSTEM_CLIENT_CREATE_SCHEMA
+        db   : Session,
+        data : SYSTEM_CLIENT_CREATE_SCHEMA,
     ) -> Tuple[SYSTEM_CLIENT_MODEL, str]:
         existing = (
             db.query(SYSTEM_CLIENT_MODEL)
             .filter(
-                SYSTEM_CLIENT_MODEL.code == data.code
-                , SYSTEM_CLIENT_MODEL.deleted_datetime.is_(None)
+                SYSTEM_CLIENT_MODEL.code == data.code,
+                SYSTEM_CLIENT_MODEL.deleted_datetime.is_(None),
             )
             .first()
         )
@@ -231,12 +606,12 @@ class AUTH_SERVICE:
         api_key_hash = hash_api_key(raw_api_key)
 
         client = SYSTEM_CLIENT_MODEL(
-            code           = data.code
-            , name         = data.name
-            , api_key_hash = api_key_hash
-            , description  = data.description
-            , status_code  = STATUS_CODE_ENUM.ACTIVE.value
-            , created_by   = "admin"
+            code         = data.code,
+            name         = data.name,
+            api_key_hash = api_key_hash,
+            description  = data.description,
+            status_code  = STATUS_CODE_ENUM.ACTIVE.value,
+            created_by   = "admin",
         )
         db.add(client)
         db.commit()
@@ -256,14 +631,14 @@ class AUTH_SERVICE:
 
     @staticmethod
     def revoke_system_client(
-        db     : Session
-        , code : str
+        db   : Session,
+        code : str,
     ) -> SYSTEM_CLIENT_RESPONSE_SCHEMA:
         client = (
             db.query(SYSTEM_CLIENT_MODEL)
             .filter(
-                SYSTEM_CLIENT_MODEL.code == code
-                , SYSTEM_CLIENT_MODEL.deleted_datetime.is_(None)
+                SYSTEM_CLIENT_MODEL.code == code,
+                SYSTEM_CLIENT_MODEL.deleted_datetime.is_(None),
             )
             .first()
         )
@@ -279,16 +654,16 @@ class AUTH_SERVICE:
 
     @staticmethod
     def verify_api_key(
-        db            : Session
-        , client_code : str
-        , raw_api_key : str
+        db          : Session,
+        client_code : str,
+        raw_api_key : str,
     ) -> bool:
         client = (
             db.query(SYSTEM_CLIENT_MODEL)
             .filter(
-                SYSTEM_CLIENT_MODEL.code == client_code
-                , SYSTEM_CLIENT_MODEL.deleted_datetime.is_(None)
-                , SYSTEM_CLIENT_MODEL.status_code.in_([STATUS_CODE_ENUM.ACTIVE.value, COMMON_STATUS_ENUM.ACTIVE.value])
+                SYSTEM_CLIENT_MODEL.code == client_code,
+                SYSTEM_CLIENT_MODEL.deleted_datetime.is_(None),
+                SYSTEM_CLIENT_MODEL.status_code.in_([STATUS_CODE_ENUM.ACTIVE.value, COMMON_STATUS_ENUM.ACTIVE.value]),
             )
             .first()
         )

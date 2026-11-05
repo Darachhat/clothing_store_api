@@ -73,6 +73,12 @@ class USER_MODEL(BASE_MODEL):
     branch_id                   : Mapped[Optional[uuid.UUID]]       = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.branches.id", ondelete="SET NULL"), nullable=True
     )
+    phone_number                : Mapped[Optional[str]]             = mapped_column(String(32), unique=True, nullable=True, index=True)
+    phone_verified_at           : Mapped[Optional[datetime]]        = mapped_column(DateTime(timezone=True), nullable=True)
+    telegram_id                 : Mapped[Optional[str]]             = mapped_column(String(64), unique=True, nullable=True, index=True)
+    telegram_username           : Mapped[Optional[str]]             = mapped_column(String(100), nullable=True)
+    telegram_photo_url          : Mapped[Optional[str]]             = mapped_column(String(500), nullable=True)
+    telegram_linked_at          : Mapped[Optional[datetime]]        = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at               : Mapped[Optional[datetime]]        = mapped_column(DateTime(timezone=True), nullable=True)
     status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
@@ -83,6 +89,10 @@ class USER_MODEL(BASE_MODEL):
     refresh_tokens              : Mapped[list[REFRESH_TOKEN_MODEL]] = relationship(
         "REFRESH_TOKEN_MODEL", back_populates="user", cascade="all, delete-orphan"
     )
+
+    @property
+    def phone_verified(self) -> bool:
+        return bool(self.phone_number and self.phone_verified_at is not None)
 
     @property
     def permission_codes(self) -> set[str]:

@@ -1,6 +1,7 @@
 """Authentication and authorization schemas."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 import uuid
 from pydantic.main import BaseModel
@@ -299,38 +300,85 @@ class ROLE_RESPONSE_SCHEMA(BASE_TIMESTAMP_RESPONSE_SCHEMA):
 
 
 class USER_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
-    username      : str
-    email         : str
-    full_name     : str
-    employee_code : Optional[str]              = None
-    branch_id     : Optional[uuid.UUID]        = None
-    roles         : List[ROLE_RESPONSE_SCHEMA] = []
+    username           : str
+    email              : str
+    full_name          : str
+    employee_code      : Optional[str]              = None
+    branch_id          : Optional[uuid.UUID]        = None
+    phone_number       : Optional[str]              = None
+    phone_verified     : bool                       = False
+    phone_verified_at  : Optional[datetime]         = None
+    telegram_id        : Optional[str]              = None
+    telegram_username  : Optional[str]              = None
+    telegram_photo_url : Optional[str]              = None
+    telegram_linked_at : Optional[datetime]         = None
+    last_login_at      : Optional[datetime]         = None
+    roles              : List[ROLE_RESPONSE_SCHEMA] = []
 
 
 class LOGIN_RESPONSE_SCHEMA(TOKEN_RESPONSE_SCHEMA):
     user : USER_RESPONSE_SCHEMA
 
 
+class TELEGRAM_AUTH_PAYLOAD_SCHEMA(BaseModel):
+    id         : int | str
+    first_name : Optional[str] = None
+    last_name  : Optional[str] = None
+    username   : Optional[str] = None
+    photo_url  : Optional[str] = None
+    auth_date  : int
+    hash       : str
+
+    model_config = {"from_attributes": True}
+
+
+class TELEGRAM_CONFIG_RESPONSE_SCHEMA(BaseModel):
+    enabled      : bool          = False
+    bot_username : Optional[str] = None
+
+
+class PHONE_VERIFICATION_REQUEST_SCHEMA(BaseModel):
+    phone_number : str = Field(..., min_length=6, max_length=32)
+
+
+class PHONE_VERIFICATION_CHALLENGE_RESPONSE_SCHEMA(BaseModel):
+    message            : str
+    normalized_phone   : str
+    expires_in_seconds : int
+    delivery_channel   : str = "telegram"
+
+
+class PHONE_VERIFY_CONFIRM_SCHEMA(BaseModel):
+    phone_number : str = Field(..., min_length=6, max_length=32)
+    otp_code     : str = Field(..., min_length=4, max_length=10)
+
+
 class USER_CREATE_SCHEMA(BaseModel):
-    username      : str                 = Field(min_length=3, max_length=100)
-    email         : EmailStr
-    full_name     : str
-    password      : str                 = Field(min_length=8)
-    employee_code : Optional[str]       = None
-    branch_id     : Optional[uuid.UUID] = None
-    role_ids      : List[uuid.UUID]     = []
-    status_code   : str                 = "ACTIVE"
+    username       : str                 = Field(min_length=3, max_length=100)
+    email          : EmailStr
+    full_name      : str
+    password       : str                 = Field(min_length=8)
+    employee_code  : Optional[str]       = None
+    branch_id      : Optional[uuid.UUID] = None
+    phone_number   : Optional[str]       = None
+    phone_verified : bool                = False
+    role_ids       : List[uuid.UUID]     = []
+    status_code    : str                 = "ACTIVE"
 
     model_config = {"from_attributes": True}
 
 
 class USER_UPDATE_SCHEMA(BASE_STATUS_UPDATE_SCHEMA):
-    full_name     : Optional[str]             = None
-    email         : Optional[EmailStr]        = None
-    employee_code : Optional[str]             = None
-    branch_id     : Optional[uuid.UUID]       = None
-    password      : Optional[str]             = Field(default=None, min_length=8)
-    role_ids      : Optional[List[uuid.UUID]] = None
+    full_name        : Optional[str]             = None
+    email            : Optional[EmailStr]        = None
+    employee_code    : Optional[str]             = None
+    branch_id        : Optional[uuid.UUID]       = None
+    phone_number     : Optional[str]             = None
+    phone_verified   : Optional[bool]            = None
+    unlink_phone     : Optional[bool]            = None
+    unlink_telegram  : Optional[bool]            = None
+    password         : Optional[str]             = Field(default=None, min_length=8)
+    role_ids         : Optional[List[uuid.UUID]] = None
 
 
 class ROLE_CREATE_SCHEMA(BaseModel):
@@ -375,6 +423,11 @@ __all__ = [
     "ROLE_RESPONSE_SCHEMA",
     "USER_RESPONSE_SCHEMA",
     "LOGIN_RESPONSE_SCHEMA",
+    "TELEGRAM_AUTH_PAYLOAD_SCHEMA",
+    "TELEGRAM_CONFIG_RESPONSE_SCHEMA",
+    "PHONE_VERIFICATION_REQUEST_SCHEMA",
+    "PHONE_VERIFICATION_CHALLENGE_RESPONSE_SCHEMA",
+    "PHONE_VERIFY_CONFIRM_SCHEMA",
     "USER_CREATE_SCHEMA",
     "USER_UPDATE_SCHEMA",
     "ROLE_CREATE_SCHEMA",

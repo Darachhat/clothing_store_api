@@ -25,7 +25,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 # Root and project directory discovery
-ROOT_DIR = Path(__file__).resolve().parent.parent if Path(__file__).resolve().parent.name == "scripts" else Path(__file__).resolve().parent
+_script_dir = Path(__file__).resolve().parent
+if _script_dir.name == "scripts" and _script_dir.parent.name == "backend":
+    ROOT_DIR = _script_dir.parent.parent
+elif _script_dir.name == "scripts":
+    ROOT_DIR = _script_dir.parent
+else:
+    ROOT_DIR = _script_dir
 BACKEND_DIR = ROOT_DIR / "backend"
 SHARED_API_DIR = ROOT_DIR / "shared-api"
 GENERATED_DIR = SHARED_API_DIR / "generated"

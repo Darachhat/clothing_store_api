@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import selectinload
 
-from app.models import RefreshToken, Role, User
+from app.core.utils.phone_utils import get_equivalent_phone_formats, normalize_phone_number
+from app.models import Permission, RefreshToken, Role, User
 from app.repositories.base import BaseRepository
 
 
@@ -38,17 +39,102 @@ class UserRepository(BaseRepository[User]):
         )
         return result.scalar_one_or_none()
 
+    async def get_by_telegram_id(self, telegram_id: str) -> User | None:
+        result = await self.db.execute(
+            select(User)
+            .where(User.telegram_id == str(telegram_id).strip())
+            .options(selectinload(User.roles).selectinload(Role.permissions))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_phone_number(self, phone_number: str) -> User | None:
+        try:
+            variants = get_equivalent_phone_formats(phone_number)
+        except ValueError:
+            variants = [phone_number.strip()]
+        result = await self.db.execute(
+            select(User)
+            .where(User.phone_number.in_(variants))
+            .options(selectinload(User.roles).selectinload(Role.permissions))
+        )
+        return result.scalar_one_or_none()
+
     async def username_exists(self, username: str) -> bool:
         result = await self.db.execute(
             select(User.id).where(User.username == username)
         )
         return result.scalar_one_or_none() is not None
 
-    async def email_exists(self, email: str) -> bool:
-        result = await self.db.execute(
-            select(User.id).where(User.email == email)
-        )
+    async def email_exists(self, email: str, exclude_user_id: UUID | None = None) -> bool:
+        stmt = select(User.id).where(User.email == email)
+        if exclude_user_id:
+            stmt = stmt.where(User.id != exclude_user_id)
+        result = await self.db.execute(stmt)
         return result.scalar_one_or_none() is not None
+
+    async def telegram_id_exists(self, telegram_id: str, exclude_user_id: UUID | None = None) -> bool:
+        stmt = select(User.id).where(User.telegram_id == str(telegram_id).strip())
+        if exclude_user_id:
+            stmt = stmt.where(User.id != exclude_user_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none() is not None
+
+    async def phone_number_exists(self, phone_number: str, exclude_user_id: UUID | None = None) -> bool:
+        try:
+            variants = get_equivalent_phone_formats(phone_number)
+        except ValueError:
+            variants = [phone_number.strip()]
+        stmt = select(User.id).where(User.phone_number.in_(variants))
+        if exclude_user_id:
+            stmt = stmt.where(User.id != exclude_user_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none() is not None
+
+    def _apply_filters(
+        self,
+        stmt,
+        *,
+        branch_id: UUID | None = None,
+        status: str | None = None,
+        search: str | None = None,
+        role: str | None = None,
+        telegram_linked: bool | None = None,
+        phone_verified: bool | None = None,
+    ):
+        if branch_id:
+            stmt = stmt.where(User.branch_id == branch_id)
+        if status:
+            stmt = stmt.where(User.status == status.upper())
+        if role:
+            stmt = stmt.where(User.roles.any(Role.name == role.upper().strip()))
+        if telegram_linked is True:
+            stmt = stmt.where(User.telegram_id.is_not(None))
+        elif telegram_linked is False:
+            stmt = stmt.where(User.telegram_id.is_(None))
+        if phone_verified is True:
+            stmt = stmt.where(User.phone_verified_at.is_not(None))
+        elif phone_verified is False:
+            stmt = stmt.where(User.phone_verified_at.is_(None))
+        if search and search.strip():
+            term = search.strip()
+            pattern = f"%{term}%"
+            clauses = [
+                User.username.ilike(pattern),
+                User.email.ilike(pattern),
+                User.full_name.ilike(pattern),
+                User.employee_code.ilike(pattern),
+                User.phone_number.ilike(pattern),
+                User.telegram_username.ilike(pattern),
+                User.telegram_id.ilike(pattern),
+            ]
+            try:
+                norm_phone = normalize_phone_number(term)
+                if norm_phone:
+                    clauses.append(User.phone_number == norm_phone)
+            except ValueError:
+                pass
+            stmt = stmt.where(or_(*clauses))
+        return stmt
 
     async def list_users(
         self,
@@ -57,17 +143,25 @@ class UserRepository(BaseRepository[User]):
         limit: int = 100,
         branch_id: UUID | None = None,
         status: str | None = None,
+        search: str | None = None,
+        role: str | None = None,
+        telegram_linked: bool | None = None,
+        phone_verified: bool | None = None,
     ) -> list[User]:
         stmt = (
             select(User)
             .options(selectinload(User.roles).selectinload(Role.permissions))
             .order_by(User.created_at.desc())
         )
-        if branch_id:
-            stmt = stmt.where(User.branch_id == branch_id)
-        if status:
-            stmt = stmt.where(User.status == status)
-
+        stmt = self._apply_filters(
+            stmt,
+            branch_id=branch_id,
+            status=status,
+            search=search,
+            role=role,
+            telegram_linked=telegram_linked,
+            phone_verified=phone_verified,
+        )
         stmt = stmt.offset(skip).limit(limit)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
@@ -77,14 +171,21 @@ class UserRepository(BaseRepository[User]):
         *,
         branch_id: UUID | None = None,
         status: str | None = None,
+        search: str | None = None,
+        role: str | None = None,
+        telegram_linked: bool | None = None,
+        phone_verified: bool | None = None,
     ) -> int:
-        from sqlalchemy import func
         stmt = select(func.count()).select_from(User)
-        if branch_id:
-            stmt = stmt.where(User.branch_id == branch_id)
-        if status:
-            stmt = stmt.where(User.status == status)
-
+        stmt = self._apply_filters(
+            stmt,
+            branch_id=branch_id,
+            status=status,
+            search=search,
+            role=role,
+            telegram_linked=telegram_linked,
+            phone_verified=phone_verified,
+        )
         result = await self.db.execute(stmt)
         return result.scalar_one()
 
@@ -119,11 +220,9 @@ class RoleRepository(BaseRepository[Role]):
 
 class PermissionRepository(BaseRepository):
     def __init__(self, db) -> None:
-        from app.models import Permission
         super().__init__(Permission, db)
 
     async def get_all_permissions(self):
-        from app.models import Permission
         stmt = select(Permission).order_by(Permission.module, Permission.code)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
@@ -140,10 +239,8 @@ class RefreshTokenRepository(BaseRepository[RefreshToken]):
         return result.scalar_one_or_none()
 
     async def revoke_all_for_user(self, user_id: UUID) -> None:
-        from sqlalchemy import update
         await self.db.execute(
             update(RefreshToken)
             .where(RefreshToken.user_id == user_id)
             .values(revoked=True)
         )
-

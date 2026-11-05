@@ -1,7 +1,8 @@
+from datetime import datetime
 from typing import Any, Optional
 import uuid
 
-from sqlalchemy import Boolean, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -153,4 +154,33 @@ class SYSTEM_ENDPOINT_MODEL(BASE_MODEL):
     query_config                : Mapped[Optional[Any]] = mapped_column(JSON_TYPE, nullable=True)
     description                 : Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status_code                 : Mapped[str]           = mapped_column(String(10), default="active", nullable=False)
+
+
+class TELEGRAM_AUTH_REPLAY_MODEL(BASE_MODEL):
+    __tablename__               = "telegram_auth_replays"
+    __table_args__              = {"schema": "auth"}
+
+    id                          : Mapped[uuid.UUID]     = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    auth_hash                   : Mapped[str]           = mapped_column(String(128), unique=True, index=True, nullable=False)
+    telegram_id                 : Mapped[str]           = mapped_column(String(64), index=True, nullable=False)
+    auth_date                   : Mapped[int]           = mapped_column(Integer, nullable=False)
+    expires_at                  : Mapped[datetime]      = mapped_column(DateTime(timezone=True), nullable=False)
+    status_code                 : Mapped[str]           = mapped_column(String(20), default="ACTIVE", nullable=False)
+
+
+class PHONE_VERIFICATION_MODEL(BASE_MODEL):
+    __tablename__               = "phone_verifications"
+    __table_args__              = {"schema": "auth"}
+
+    id                          : Mapped[uuid.UUID]           = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id                     : Mapped[uuid.UUID]           = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    phone_number                : Mapped[str]                 = mapped_column(String(32), index=True, nullable=False)
+    otp_hash                    : Mapped[str]                 = mapped_column(String(128), nullable=False)
+    expires_at                  : Mapped[datetime]            = mapped_column(DateTime(timezone=True), nullable=False)
+    attempts                    : Mapped[int]                 = mapped_column(Integer, default=0, nullable=False)
+    verified_at                 : Mapped[Optional[datetime]]  = mapped_column(DateTime(timezone=True), nullable=True)
+    status_code                 : Mapped[str]                 = mapped_column(String(20), default="PENDING", nullable=False)
+
 
