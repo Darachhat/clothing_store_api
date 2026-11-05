@@ -95,6 +95,14 @@ class USER_MODEL(BASE_MODEL):
         return bool(self.phone_number and self.phone_verified_at is not None)
 
     @property
+    def telegram_user_id(self) -> Optional[str]:
+        return self.telegram_id
+
+    @property
+    def telegram_is_verified(self) -> bool:
+        return bool(self.telegram_id and self.telegram_linked_at is not None)
+
+    @property
     def permission_codes(self) -> set[str]:
         return {perm.code for role in self.roles for perm in role.permissions}
 

@@ -21,6 +21,7 @@ from app.schemas.auth_schema import (
     SYSTEM_CLIENT_RESPONSE_SCHEMA,
     TELEGRAM_AUTH_PAYLOAD_SCHEMA,
     TELEGRAM_CONFIG_RESPONSE_SCHEMA,
+    TELEGRAM_STATUS_RESPONSE_SCHEMA,
     TOKEN_RESPONSE_SCHEMA,
     USER_RESPONSE_SCHEMA,
 )
@@ -100,6 +101,17 @@ async def get_telegram_auth_config(
     return TELEGRAM_CONFIG_RESPONSE_SCHEMA(**cfg)
 
 
+@router.get("/telegram/status", response_model=TELEGRAM_STATUS_RESPONSE_SCHEMA)
+async def get_telegram_auth_status(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_async_db)],
+) -> TELEGRAM_STATUS_RESPONSE_SCHEMA:
+    service = AUTH_SERVICE(db)
+    st = await service.get_telegram_status(current_user)
+    return TELEGRAM_STATUS_RESPONSE_SCHEMA(**st)
+
+
+@router.post("/telegram", response_model=LOGIN_RESPONSE_SCHEMA)
 @router.post("/telegram/login", response_model=LOGIN_RESPONSE_SCHEMA)
 async def login_with_telegram(
     body: TELEGRAM_AUTH_PAYLOAD_SCHEMA,
@@ -122,6 +134,7 @@ async def link_telegram_account(
     return await service.link_telegram_identity(current_user, body.model_dump(), request=request)
 
 
+@router.delete("/telegram/unlink", response_model=USER_RESPONSE_SCHEMA)
 @router.delete("/telegram/link", response_model=USER_RESPONSE_SCHEMA)
 async def unlink_telegram_account(
     request: Request,

@@ -41,6 +41,7 @@ def build_signed_telegram_payload(
 
 
 async def seed_roles_and_users(db: AsyncSession) -> dict[str, Any]:
+    AUTH_SERVICE.reset_rate_limits()
     settings.TELEGRAM_BOT_TOKEN = TEST_BOT_TOKEN
     settings.TELEGRAM_BOT_USERNAME = "clothing_store_test_bot"
 
@@ -323,6 +324,132 @@ async def test_duplicate_telegram_identity_conflict(client: AsyncClient, db: Asy
     )
     assert res2.status_code == 409
     assert "already linked" in res2.json()["detail"].lower()
+
+    # Verify USER_TELEGRAM_LINK_CONFLICT audit record was logged
+    from sqlalchemy import select
+    from app.models import AUDIT_LOG_MODEL
+    conflict_logs = (
+        await db.execute(
+            select(AUDIT_LOG_MODEL).where(AUDIT_LOG_MODEL.action == "USER_TELEGRAM_LINK_CONFLICT")
+        )
+    ).scalars().all()
+    assert len(conflict_logs) == 1
+    assert conflict_logs[0].new_data["attempted_telegram_id"] == "111222333"
+
+
+@pytest.mark.asyncio
+async def test_telegram_primary_endpoint_status_and_unlink(client: AsyncClient, db: AsyncSession) -> None:
+    await seed_roles_and_users(db)
+    admin_tokens = await login_and_get_tokens(client, "admin", "admin_pass_123")
+    headers = {"Authorization": f"Bearer {admin_tokens['access_token']}"}
+
+    # Initially not linked
+    status_before = await client.get("/api/v1/auth/telegram/status", headers=headers)
+    assert status_before.status_code == 200
+    assert status_before.json()["is_linked"] is False
+
+    # Link Telegram identity
+    link_payload = build_signed_telegram_payload(telegram_id=444555666, username="primary_tg")
+    link_res = await client.post("/api/v1/auth/telegram/link", json=link_payload, headers=headers)
+    assert link_res.status_code == 200
+
+    # Status now reports linked with metadata
+    status_after = await client.get("/api/v1/auth/telegram/status", headers=headers)
+    assert status_after.status_code == 200
+    st = status_after.json()
+    assert st["is_linked"] is True
+    assert st["telegram_id"] == "444555666"
+    assert st["telegram_username"] == "primary_tg"
+    assert st["telegram_linked_at"] is not None
+
+    # Authenticate via primary endpoint POST /api/v1/auth/telegram
+    auth_payload = build_signed_telegram_payload(
+        telegram_id=444555666,
+        username="primary_tg",
+        auth_date=int(datetime.now(UTC).timestamp()) + 2,
+    )
+    auth_res = await client.post("/api/v1/auth/telegram", json=auth_payload)
+    assert auth_res.status_code == 200
+    assert auth_res.json()["user"]["telegram_id"] == "444555666"
+
+    # Unlink via DELETE /api/v1/auth/telegram/unlink (allowed because user has password)
+    unlink_res = await client.delete("/api/v1/auth/telegram/unlink", headers=headers)
+    assert unlink_res.status_code == 200
+    assert unlink_res.json()["telegram_id"] is None
+
+    # Subsequent Telegram login with unlinked ID fails with 401
+    unlinked_login_payload = build_signed_telegram_payload(
+        telegram_id=444555666,
+        username="primary_tg",
+        auth_date=int(datetime.now(UTC).timestamp()) + 3,
+    )
+    unlinked_res = await client.post("/api/v1/auth/telegram", json=unlinked_login_payload)
+    assert unlinked_res.status_code == 401
+    assert "no user account" in unlinked_res.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_telegram_security_edge_cases_and_rate_limiting(client: AsyncClient, db: AsyncSession) -> None:
+    seeded = await seed_roles_and_users(db)
+    cashier_user = seeded["users"]["cashier"]
+
+    # 1. Modified id after signing -> rejected with 401
+    tampered_id_payload = build_signed_telegram_payload(telegram_id=12345)
+    tampered_id_payload["id"] = 99999
+    res_tampered = await client.post("/api/v1/auth/telegram", json=tampered_id_payload)
+    assert res_tampered.status_code == 401
+
+    # 2. Missing hash -> rejected (422 validation error)
+    missing_hash = {"id": 12345, "first_name": "Test", "auth_date": int(datetime.now(UTC).timestamp())}
+    res_missing = await client.post("/api/v1/auth/telegram", json=missing_hash)
+    assert res_missing.status_code == 422
+
+    # 3. Future auth_date -> rejected with 401
+    future_ts = int(datetime.now(UTC).timestamp()) + 600
+    future_payload = build_signed_telegram_payload(telegram_id=12345, auth_date=future_ts)
+    res_future = await client.post("/api/v1/auth/telegram", json=future_payload)
+    assert res_future.status_code == 401
+    assert "future" in res_future.json()["detail"].lower()
+
+    # 4. Missing bot token configuration -> rejected with 400
+    settings.TELEGRAM_BOT_TOKEN = None
+    no_cfg_payload = build_signed_telegram_payload(telegram_id=12345)
+    res_no_cfg = await client.post("/api/v1/auth/telegram", json=no_cfg_payload)
+    assert res_no_cfg.status_code == 400
+    settings.TELEGRAM_BOT_TOKEN = TEST_BOT_TOKEN
+
+    # 5. Disabled account cannot link or login via Telegram
+    cashier_tokens = await login_and_get_tokens(client, "cashier", "cashier_pass_123")
+    cashier_link_payload = build_signed_telegram_payload(telegram_id=888111222, username="cashier_tg")
+    link_ok = await client.post(
+        "/api/v1/auth/telegram/link",
+        json=cashier_link_payload,
+        headers={"Authorization": f"Bearer {cashier_tokens['access_token']}"},
+    )
+    assert link_ok.status_code == 200
+
+    cashier_user.status = "INACTIVE"
+    await db.commit()
+
+    disabled_login_payload = build_signed_telegram_payload(
+        telegram_id=888111222,
+        username="cashier_tg",
+        auth_date=int(datetime.now(UTC).timestamp()) + 2,
+    )
+    res_disabled = await client.post("/api/v1/auth/telegram", json=disabled_login_payload)
+    assert res_disabled.status_code == 403
+
+    # 6. Rate limiting triggers 429 on excessive Telegram auth requests
+    AUTH_SERVICE.reset_rate_limits()
+    got_429 = False
+    for i in range(25):
+        p = build_signed_telegram_payload(telegram_id=900000 + i, auth_date=int(datetime.now(UTC).timestamp()))
+        r = await client.post("/api/v1/auth/telegram", json=p)
+        if r.status_code == 429:
+            got_429 = True
+            break
+    assert got_429 is True
+    AUTH_SERVICE.reset_rate_limits()
 
 
 # ── 3. Verified Phone Linking Tests ───────────────────────────────────────────

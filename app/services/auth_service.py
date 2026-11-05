@@ -1,13 +1,15 @@
 """Authentication service: user JWT auth (login, logout, refresh, change password, Telegram login, phone verification) & system client API key auth."""
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta, timezone
 import hashlib
 import hmac
 import secrets
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import Request
+from fastapi import HTTPException, Request, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
@@ -51,9 +53,37 @@ from app.schemas.auth_schema import (
 
 logger = get_logger(__name__)
 
+# Sliding-window rate limit buckets: key -> list of epoch timestamps
+_RATE_LIMIT_BUCKETS: dict[str, list[float]] = defaultdict(list)
+RATE_LIMIT_MAX_REQUESTS = 15
+RATE_LIMIT_WINDOW_SECONDS = 60
+
+
+def reset_rate_limits() -> None:
+    """Clear in-memory rate limit buckets (used in automated tests)."""
+    _RATE_LIMIT_BUCKETS.clear()
+
+
+def enforce_rate_limit(bucket_key: str, *, max_requests: int = RATE_LIMIT_MAX_REQUESTS, window_seconds: int = RATE_LIMIT_WINDOW_SECONDS) -> None:
+    now = time.monotonic()
+    cutoff = now - window_seconds
+    timestamps = [ts for ts in _RATE_LIMIT_BUCKETS[bucket_key] if ts > cutoff]
+    if len(timestamps) >= max_requests:
+        _RATE_LIMIT_BUCKETS[bucket_key] = timestamps
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many authentication requests. Please wait before trying again.",
+        )
+    timestamps.append(now)
+    _RATE_LIMIT_BUCKETS[bucket_key] = timestamps
+
+
 
 class AUTH_SERVICE:
     """Service orchestrating User RBAC JWT credential issuance, Telegram Auth, Phone Linking, and System Client API keys."""
+
+    reset_rate_limits = staticmethod(reset_rate_limits)
+    enforce_rate_limit = staticmethod(enforce_rate_limit)
 
     def __init__(self, db: AsyncSession) -> None:
         self.db         = db
@@ -245,7 +275,41 @@ class AUTH_SERVICE:
             "bot_username" : bot_username,
         }
 
-    async def _verify_and_record_telegram_payload(self, auth_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def get_telegram_status(self, current_user: Optional[User] = None) -> Dict[str, Any]:
+        token, bot_username = await self._resolve_telegram_bot_credentials()
+        if not current_user:
+            return {
+                "enabled"              : bool(token),
+                "bot_username"         : bot_username,
+                "is_linked"            : False,
+                "telegram_is_verified" : False,
+                "telegram_id"          : None,
+                "telegram_user_id"     : None,
+                "telegram_username"    : None,
+                "telegram_photo_url"   : None,
+                "telegram_linked_at"   : None,
+            }
+        is_linked = bool(current_user.telegram_id)
+        return {
+            "enabled"              : bool(token),
+            "bot_username"         : bot_username,
+            "is_linked"            : is_linked,
+            "telegram_is_verified" : bool(is_linked and current_user.telegram_linked_at is not None),
+            "telegram_id"          : current_user.telegram_id,
+            "telegram_user_id"     : current_user.telegram_id,
+            "telegram_username"    : current_user.telegram_username,
+            "telegram_photo_url"   : current_user.telegram_photo_url,
+            "telegram_linked_at"   : current_user.telegram_linked_at,
+        }
+
+    async def _verify_and_record_telegram_payload(
+        self,
+        auth_data: Dict[str, Any],
+        request: Optional[Request] = None,
+    ) -> Dict[str, Any]:
+        client_ip = request.client.host if request and request.client else "unknown"
+        enforce_rate_limit(f"telegram_auth:{client_ip}")
+
         token, _ = await self._resolve_telegram_bot_credentials()
         if not token:
             raise BAD_REQUEST_EXCEPTION("Telegram authentication is not configured")
@@ -281,7 +345,7 @@ class AUTH_SERVICE:
         request       : Optional[Request] = None,
         required_role : Optional[str] = None,
     ) -> Dict[str, Any]:
-        verified = await self._verify_and_record_telegram_payload(auth_data)
+        verified = await self._verify_and_record_telegram_payload(auth_data, request=request)
         user = await self.user_repo.get_by_telegram_id(verified["telegram_id"])
         if not user:
             raise UNAUTHORIZED_EXCEPTION(
@@ -318,10 +382,28 @@ class AUTH_SERVICE:
         auth_data    : Dict[str, Any],
         request      : Optional[Request] = None,
     ) -> User:
-        verified = await self._verify_and_record_telegram_payload(auth_data)
+        if current_user.status != COMMON_STATUS_ENUM.ACTIVE.value:
+            raise FORBIDDEN_EXCEPTION("Account is not active")
+
+        verified = await self._verify_and_record_telegram_payload(auth_data, request=request)
         telegram_id = verified["telegram_id"]
 
         if await self.user_repo.telegram_id_exists(telegram_id, exclude_user_id=current_user.id):
+            from app.services.audit_service import AUDIT_SERVICE
+            await AUDIT_SERVICE.record(
+                self.db,
+                action      = "USER_TELEGRAM_LINK_CONFLICT",
+                entity_type = "user",
+                entity_id   = current_user.id,
+                user_id     = current_user.id,
+                ip_address  = request.client.host if request and request.client else None,
+                user_agent  = request.headers.get("user-agent") if request else None,
+                new_data    = {
+                    "attempted_telegram_id": telegram_id,
+                    "reason": "already_linked_to_another_account",
+                },
+            )
+            await self.db.commit()
             raise CONFLICT_EXCEPTION("This Telegram identity is already linked to another user account")
 
         old_telegram_id = current_user.telegram_id

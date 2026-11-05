@@ -300,20 +300,22 @@ class ROLE_RESPONSE_SCHEMA(BASE_TIMESTAMP_RESPONSE_SCHEMA):
 
 
 class USER_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
-    username           : str
-    email              : str
-    full_name          : str
-    employee_code      : Optional[str]              = None
-    branch_id          : Optional[uuid.UUID]        = None
-    phone_number       : Optional[str]              = None
-    phone_verified     : bool                       = False
-    phone_verified_at  : Optional[datetime]         = None
-    telegram_id        : Optional[str]              = None
-    telegram_username  : Optional[str]              = None
-    telegram_photo_url : Optional[str]              = None
-    telegram_linked_at : Optional[datetime]         = None
-    last_login_at      : Optional[datetime]         = None
-    roles              : List[ROLE_RESPONSE_SCHEMA] = []
+    username             : str
+    email                : str
+    full_name            : str
+    employee_code        : Optional[str]              = None
+    branch_id            : Optional[uuid.UUID]        = None
+    phone_number         : Optional[str]              = None
+    phone_verified       : bool                       = False
+    phone_verified_at    : Optional[datetime]         = None
+    telegram_id          : Optional[str]              = None
+    telegram_user_id     : Optional[str]              = None
+    telegram_username    : Optional[str]              = None
+    telegram_photo_url   : Optional[str]              = None
+    telegram_linked_at   : Optional[datetime]         = None
+    telegram_is_verified : bool                       = False
+    last_login_at        : Optional[datetime]         = None
+    roles                : List[ROLE_RESPONSE_SCHEMA] = []
 
 
 class LOGIN_RESPONSE_SCHEMA(TOKEN_RESPONSE_SCHEMA):
@@ -335,6 +337,18 @@ class TELEGRAM_AUTH_PAYLOAD_SCHEMA(BaseModel):
 class TELEGRAM_CONFIG_RESPONSE_SCHEMA(BaseModel):
     enabled      : bool          = False
     bot_username : Optional[str] = None
+
+
+class TELEGRAM_STATUS_RESPONSE_SCHEMA(BaseModel):
+    enabled              : bool               = False
+    bot_username         : Optional[str]      = None
+    is_linked            : bool               = False
+    telegram_is_verified : bool               = False
+    telegram_id          : Optional[str]      = None
+    telegram_user_id     : Optional[str]      = None
+    telegram_username    : Optional[str]      = None
+    telegram_photo_url   : Optional[str]      = None
+    telegram_linked_at   : Optional[datetime] = None
 
 
 class PHONE_VERIFICATION_REQUEST_SCHEMA(BaseModel):
@@ -425,6 +439,7 @@ __all__ = [
     "LOGIN_RESPONSE_SCHEMA",
     "TELEGRAM_AUTH_PAYLOAD_SCHEMA",
     "TELEGRAM_CONFIG_RESPONSE_SCHEMA",
+    "TELEGRAM_STATUS_RESPONSE_SCHEMA",
     "PHONE_VERIFICATION_REQUEST_SCHEMA",
     "PHONE_VERIFICATION_CHALLENGE_RESPONSE_SCHEMA",
     "PHONE_VERIFY_CONFIRM_SCHEMA",
