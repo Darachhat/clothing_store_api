@@ -247,7 +247,7 @@ class AUTH_SERVICE:
     async def _resolve_telegram_bot_credentials(self) -> Tuple[Optional[str], Optional[str]]:
         """Resolve active Telegram bot token and public bot username without ever exposing the token."""
         token = (settings.TELEGRAM_BOT_TOKEN or "").strip() or None
-        bot_username = (settings.TELEGRAM_BOT_USERNAME or "").strip() or None
+        bot_username = (settings.TELEGRAM_BOT_USERNAME or "").strip().lstrip("@") or None
 
         stmt = (
             select(TELEGRAM_BOT_MODEL)
@@ -268,19 +268,29 @@ class AUTH_SERVICE:
 
         return token, bot_username
 
+    @staticmethod
+    def _extract_public_bot_id(token: Optional[str]) -> Optional[str]:
+        if not token or ":" not in token:
+            return None
+        bot_id = token.split(":", 1)[0].strip()
+        return bot_id if bot_id.isdigit() else None
+
     async def get_telegram_config(self) -> Dict[str, Any]:
         token, bot_username = await self._resolve_telegram_bot_credentials()
         return {
             "enabled"      : bool(token),
             "bot_username" : bot_username,
+            "bot_id"       : self._extract_public_bot_id(token),
         }
 
     async def get_telegram_status(self, current_user: Optional[User] = None) -> Dict[str, Any]:
         token, bot_username = await self._resolve_telegram_bot_credentials()
+        bot_id = self._extract_public_bot_id(token)
         if not current_user:
             return {
                 "enabled"              : bool(token),
                 "bot_username"         : bot_username,
+                "bot_id"               : bot_id,
                 "is_linked"            : False,
                 "telegram_is_verified" : False,
                 "telegram_id"          : None,
@@ -293,6 +303,7 @@ class AUTH_SERVICE:
         return {
             "enabled"              : bool(token),
             "bot_username"         : bot_username,
+            "bot_id"               : bot_id,
             "is_linked"            : is_linked,
             "telegram_is_verified" : bool(is_linked and current_user.telegram_linked_at is not None),
             "telegram_id"          : current_user.telegram_id,
@@ -341,16 +352,50 @@ class AUTH_SERVICE:
 
     async def login_with_telegram(
         self,
-        auth_data     : Dict[str, Any],
-        request       : Optional[Request] = None,
-        required_role : Optional[str] = None,
+        auth_data            : Dict[str, Any],
+        request              : Optional[Request] = None,
+        required_role        : Optional[str] = None,
+        auto_create_customer : bool = False,
     ) -> Dict[str, Any]:
         verified = await self._verify_and_record_telegram_payload(auth_data, request=request)
         user = await self.user_repo.get_by_telegram_id(verified["telegram_id"])
         if not user:
-            raise UNAUTHORIZED_EXCEPTION(
-                "No user account is linked to this Telegram identity. Please sign in and link your Telegram account first."
-            )
+            if auto_create_customer:
+                from app.models import Role
+                role_res = await self.db.execute(select(Role).where(Role.name == "CUSTOMER"))
+                customer_role = role_res.scalar_one_or_none()
+                if not customer_role:
+                    customer_role = Role(name="CUSTOMER", description="Web store customer", is_system=True)
+                    self.db.add(customer_role)
+                    await self.db.flush()
+
+                tg_id_str = verified["telegram_id"]
+                base_username = verified.get("username") or f"tg_{tg_id_str}"
+                candidate_username = base_username
+                if await self.user_repo. get_by_username(candidate_username):
+                    candidate_username = f"tg_{tg_id_str}"
+
+                full_name_parts = [p for p in (verified.get("first_name"), verified.get("last_name")) if p]
+                full_name = " ".join(full_name_parts) if full_name_parts else candidate_username
+
+                user = User(
+                    username           = candidate_username,
+                    email              = f"tg_{tg_id_str}@telegram.local",
+                    full_name          = full_name,
+                    hashed_password    = "!telegram_only",
+                    telegram_id        = tg_id_str,
+                    telegram_username  = verified.get("username"),
+                    telegram_photo_url = verified.get("photo_url"),
+                    telegram_linked_at = datetime.now(UTC),
+                    status             = COMMON_STATUS_ENUM.ACTIVE.value,
+                    roles              = [customer_role],
+                )
+                self.db.add(user)
+                await self.db.flush()
+            else:
+                raise UNAUTHORIZED_EXCEPTION(
+                    "No user account is linked to this Telegram identity. Please sign in with your existing credentials first and connect Telegram in your account settings."
+                )
 
         if user.status != COMMON_STATUS_ENUM.ACTIVE.value:
             raise FORBIDDEN_EXCEPTION("Account is not active")

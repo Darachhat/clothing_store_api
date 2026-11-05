@@ -1,9 +1,10 @@
 from typing import Annotated, List
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.api.deps.database import get_db as get_sync_db
+from app.core.config import settings
 from app.core.database import get_db as get_async_db
 from app.core.deps import get_current_active_user, require_system_admin
 from app.models import User
@@ -29,6 +30,33 @@ from app.schemas.base_schema import RESPONSE_ENVELOPE
 from app.services.auth_service import AUTH_SERVICE
 
 router = APIRouter(prefix="/auth", tags=["Authentication & System Client Auth"])
+
+
+def set_session_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    is_secure = settings.ENV.lower() == "production"
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=is_secure,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=is_secure,
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        path="/",
+    )
+
+
+def clear_session_cookies(response: Response) -> None:
+    response.delete_cookie(key="access_token", path="/")
+    response.delete_cookie(key="refresh_token", path="/")
 
 
 # ── System Client API Key Authentication (Template) ──────────────────────────
@@ -85,10 +113,12 @@ def revoke_system_client(
 async def login(
     body: LOGIN_REQUEST_SCHEMA,
     request: Request,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_async_db)],
 ) -> LOGIN_RESPONSE_SCHEMA:
     service = AUTH_SERVICE(db)
     result = await service.login(body.username, body.password, request)
+    set_session_cookies(response, result["access_token"], result["refresh_token"])
     return LOGIN_RESPONSE_SCHEMA(**result)
 
 
@@ -116,10 +146,12 @@ async def get_telegram_auth_status(
 async def login_with_telegram(
     body: TELEGRAM_AUTH_PAYLOAD_SCHEMA,
     request: Request,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_async_db)],
 ) -> LOGIN_RESPONSE_SCHEMA:
     service = AUTH_SERVICE(db)
-    result = await service.login_with_telegram(body.model_dump(), request=request)
+    result = await service.login_with_telegram(body.model_dump(exclude_none=True), request=request)
+    set_session_cookies(response, result["access_token"], result["refresh_token"])
     return LOGIN_RESPONSE_SCHEMA(**result)
 
 
@@ -131,7 +163,7 @@ async def link_telegram_account(
     db: Annotated[AsyncSession, Depends(get_async_db)],
 ) -> User:
     service = AUTH_SERVICE(db)
-    return await service.link_telegram_identity(current_user, body.model_dump(), request=request)
+    return await service.link_telegram_identity(current_user, body.model_dump(exclude_none=True), request=request)
 
 
 @router.delete("/telegram/unlink", response_model=USER_RESPONSE_SCHEMA)
@@ -179,20 +211,24 @@ async def verify_and_link_phone(
 @router.post("/refresh", response_model=TOKEN_RESPONSE_SCHEMA)
 async def refresh(
     body: REFRESH_REQUEST_SCHEMA,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_async_db)],
 ) -> TOKEN_RESPONSE_SCHEMA:
     service = AUTH_SERVICE(db)
     result = await service.refresh(body.refresh_token)
+    set_session_cookies(response, result["access_token"], result["refresh_token"])
     return TOKEN_RESPONSE_SCHEMA(**result)
 
 
 @router.post("/logout")
 async def logout(
     body: LOGOUT_REQUEST_SCHEMA,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_async_db)],
 ) -> dict:
     service = AUTH_SERVICE(db)
     await service.logout(body.refresh_token)
+    clear_session_cookies(response)
     return {"message": "Logged out successfully"}
 
 

@@ -7,12 +7,13 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.store.auth import require_customer
+from app.api.v1.handlers.auth_handler import clear_session_cookies, set_session_cookies
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.models import Role, User
@@ -90,6 +91,7 @@ async def register_customer(
 async def customer_login(
     body: LOGIN_REQUEST_SCHEMA,
     request: Request,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LOGIN_RESPONSE_SCHEMA:
     """Customer login — returns JWT access + refresh tokens."""
@@ -113,6 +115,7 @@ async def customer_login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This endpoint is for customer accounts only.",
         )
+    set_session_cookies(response, result["access_token"], result["refresh_token"])
     return LOGIN_RESPONSE_SCHEMA(**result)
 
 
@@ -140,14 +143,17 @@ async def customer_telegram_status(
 async def customer_telegram_login(
     body: TELEGRAM_AUTH_PAYLOAD_SCHEMA,
     request: Request,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LOGIN_RESPONSE_SCHEMA:
     service = AUTH_SERVICE(db)
     result = await service.login_with_telegram(
-        body.model_dump(),
+        body.model_dump(exclude_none=True),
         request=request,
         required_role="CUSTOMER",
+        auto_create_customer=True,
     )
+    set_session_cookies(response, result["access_token"], result["refresh_token"])
     return LOGIN_RESPONSE_SCHEMA(**result)
 
 
@@ -159,7 +165,7 @@ async def customer_link_telegram(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
     service = AUTH_SERVICE(db)
-    return await service.link_telegram_identity(current_customer, body.model_dump(), request=request)
+    return await service.link_telegram_identity(current_customer, body.model_dump(exclude_none=True), request=request)
 
 
 @router.delete("/telegram/unlink", response_model=USER_RESPONSE_SCHEMA)
@@ -207,20 +213,24 @@ async def customer_verify_phone(
 @router.post("/refresh", response_model=TOKEN_RESPONSE_SCHEMA)
 async def customer_refresh(
     body: REFRESH_REQUEST_SCHEMA,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TOKEN_RESPONSE_SCHEMA:
     service = AUTH_SERVICE(db)
     result = await service.refresh(body.refresh_token)
+    set_session_cookies(response, result["access_token"], result["refresh_token"])
     return TOKEN_RESPONSE_SCHEMA(**result)
 
 
 @router.post("/logout")
 async def customer_logout(
     body: LOGOUT_REQUEST_SCHEMA,
+    response: Response,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     service = AUTH_SERVICE(db)
     await service.logout(body.refresh_token)
+    clear_session_cookies(response)
     return {"message": "Logged out successfully"}
 
 

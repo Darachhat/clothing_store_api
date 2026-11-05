@@ -331,17 +331,20 @@ class TELEGRAM_AUTH_PAYLOAD_SCHEMA(BaseModel):
     auth_date  : int
     hash       : str
 
-    model_config = {"from_attributes": True}
+    # Allow all extra fields sent by Telegram so future Telegram fields are included in signature verification
+    model_config = {"from_attributes": True, "extra": "allow"}
 
 
 class TELEGRAM_CONFIG_RESPONSE_SCHEMA(BaseModel):
     enabled      : bool          = False
     bot_username : Optional[str] = None
+    bot_id       : Optional[str] = None
 
 
 class TELEGRAM_STATUS_RESPONSE_SCHEMA(BaseModel):
     enabled              : bool               = False
     bot_username         : Optional[str]      = None
+    bot_id               : Optional[str]      = None
     is_linked            : bool               = False
     telegram_is_verified : bool               = False
     telegram_id          : Optional[str]      = None

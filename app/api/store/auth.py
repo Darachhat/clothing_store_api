@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.security import verify_access_token
@@ -25,13 +25,15 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_optional_customer(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User | None:
     """Returns the authenticated customer user, or None if not logged in."""
-    if not credentials:
+    raw_token = credentials.credentials if credentials else request.cookies.get("access_token")
+    if not raw_token:
         return None
-    payload = verify_access_token(credentials.credentials)
+    payload = verify_access_token(raw_token)
     if not payload:
         return None
     user_id: str | None = payload.get("sub")

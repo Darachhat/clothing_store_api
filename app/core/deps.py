@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,20 +14,22 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
-    """Extract and validate access token; return the authenticated user."""
+    """Extract and validate access token (from Bearer header or HttpOnly cookie); return the authenticated user."""
     unauthorized = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Not authenticated",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    if not credentials:
+    raw_token = credentials.credentials if credentials else request.cookies.get("access_token")
+    if not raw_token:
         raise unauthorized
 
-    payload = verify_access_token(credentials.credentials)
+    payload = verify_access_token(raw_token)
     if not payload:
         raise unauthorized
 
