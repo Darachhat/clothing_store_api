@@ -365,6 +365,16 @@ ADMIN_FRONT_TRANSLATIONS: List[Dict[str, Any]] = [
     {
         "schema_name": "admin_front",
         "table_name": "nav",
+        "column_name": "translations",
+        "en": "Translations CMS",
+        "km": "ការគ្រប់គ្រងខ្លឹមសារ & ភាសា",
+        "cn": "多语言内容管理",
+        "jp": "多言語コンテンツ管理",
+        "kr": "다국어 콘텐츠 관리",
+    },
+    {
+        "schema_name": "admin_front",
+        "table_name": "nav",
         "column_name": "settings",
         "en": "Settings",
         "km": "ការកំណត់ហាង",
