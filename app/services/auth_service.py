@@ -246,10 +246,7 @@ class AUTH_SERVICE:
     # ── Telegram Login & Identity Linking ─────────────────────────────────────
 
     async def _resolve_telegram_bot_credentials(self) -> Tuple[Optional[str], Optional[str]]:
-        """Resolve active Telegram bot token and public bot username without ever exposing the token."""
-        token = (settings.TELEGRAM_BOT_TOKEN or "").strip() or None
-        bot_username = (settings.TELEGRAM_BOT_USERNAME or "").strip().lstrip("@") or None
-
+        """Resolve active Telegram bot token and public bot username directly from the DB."""
         stmt = (
             select(TELEGRAM_BOT_MODEL)
             .where(
@@ -261,11 +258,8 @@ class AUTH_SERVICE:
         )
         res = await self.db.execute(stmt)
         bot_row = res.scalar_one_or_none()
-        if bot_row:
-            if not token and bot_row.token:
-                token = bot_row.token.strip()
-            if not bot_username and bot_row.username:
-                bot_username = bot_row.username.strip().lstrip("@")
+        token = bot_row.token.strip() if (bot_row and bot_row.token) else None
+        bot_username = bot_row.username.strip().lstrip("@") if (bot_row and bot_row.username) else None
 
         return token, bot_username
 

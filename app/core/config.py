@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Self
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -58,6 +58,23 @@ class SETTINGS(BaseSettings):
                 return json.loads(v_str)
             return [item.strip() for item in v_str.split(",") if item.strip()]
         return v
+
+    @model_validator(mode="after")
+    def sync_aliases(self) -> Self:
+        # Sync ENV and ENVIRONMENT
+        if self.ENVIRONMENT and self.ENV == "development":
+            self.ENV = self.ENVIRONMENT
+        elif self.ENV != "development" and self.ENVIRONMENT == "development":
+            self.ENVIRONMENT = self.ENV  # type: ignore
+
+        # Sync CORS origins: setting either BACKEND_CORS_ORIGINS or WHITE_LIST_CORS syncs both
+        default_backend_cors = ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3003"]
+        if self.BACKEND_CORS_ORIGINS != default_backend_cors and self.WHITE_LIST_CORS == ["*"]:
+            self.WHITE_LIST_CORS = self.BACKEND_CORS_ORIGINS
+        elif self.WHITE_LIST_CORS != ["*"] and self.BACKEND_CORS_ORIGINS == default_backend_cors:
+            self.BACKEND_CORS_ORIGINS = self.WHITE_LIST_CORS
+
+        return self
 
     # ── PostgreSQL & Template Database Settings ───────────────────────────────
     DB_DIALECT                      : str                                           = "postgresql+psycopg2"
@@ -155,20 +172,14 @@ class SETTINGS(BaseSettings):
     R2_PUBLIC_URL                   : str                                           = "https://api.kimvannak.store/uploads"
 
     # ── ABA PayWay ────────────────────────────────────────────────────────────
+    # Stored dynamically in DB (auth.system, auth.credential_api_key, auth.system_endpoint).
     PAYWAY_ENABLED                  : bool                                          = True
-    PAYWAY_BASE_URL                 : str                                           = "https://checkout-sandbox.payway.com.kh"
     PAYWAY_CHECKOUT_SCRIPT_URL      : str                                           = "https://checkout.payway.com.kh/plugins/checkout2-0.js?hide-close=2"
-    PAYWAY_MERCHANT_ID              : str                                           = ""
-    PAYWAY_PUBLIC_KEY               : str                                           = ""
-    PAYWAY_RSA_PUBLIC_KEY           : str                                           = ""
-    PAYWAY_RSA_PRIVATE_KEY          : str                                           = ""
     PAYWAY_CALLBACK_BASE_URL        : str                                           = ""
     PAYWAY_QR_LIFETIME_MINUTES      : int                                           = 10
 
     # ── Telegram Notifications & Authentication ───────────────────────────────
-    TELEGRAM_BOT_TOKEN              : str                                           = ""
-    TELEGRAM_BOT_USERNAME           : str                                           = ""
-    TELEGRAM_GROUP_ID               : str                                           = ""
+    # Stored dynamically in DB (auth.telegram_bot and auth.telegram_chat via TELEGRAM_UTILS).
     TELEGRAM_AUTH_MAX_AGE_SECONDS   : int                                           = 300
     PHONE_OTP_EXPIRE_MINUTES        : int                                           = 10
     PHONE_OTP_MAX_ATTEMPTS          : int                                           = 5

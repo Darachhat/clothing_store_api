@@ -10,16 +10,77 @@ Handles:
 from __future__ import annotations
 
 import base64
+from dataclasses import dataclass
 import hashlib
 import hmac
 import json
+import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 from loguru import logger
 
 from app.core.config import settings
+
+
+# ── Configuration dataclass & DB loader ──────────────────────────────────────
+
+@dataclass
+class PayWayConfig:
+    """PayWay runtime credentials and gateway endpoints."""
+    merchant_id: str
+    public_key: str
+    base_url: str
+
+
+def _load_payway_config() -> PayWayConfig:
+    """Load PayWay configuration directly from the database (auth.system & auth.credential_api_key)."""
+    merchant_id = ""
+    public_key = ""
+    base_url = ""
+
+    from app.core.database import get_static_session
+    from app.models.auth_schema_model import CREDENTIAL_API_KEY_MODEL, SYSTEM_MODEL
+
+    session = get_static_session()
+    try:
+        # Query system configuration
+        system_row = (
+            session.query(SYSTEM_MODEL)
+            .filter(
+                SYSTEM_MODEL.code == "payway",
+                SYSTEM_MODEL.deleted_datetime.is_(None),
+                SYSTEM_MODEL.status_code.in_(["active", "ACTIVE"]),
+            )
+            .first()
+        )
+        if system_row and system_row.base_url:
+            base_url = system_row.base_url
+
+        # Query API key credentials (merchant_id, public_key)
+        cred_rows = (
+            session.query(CREDENTIAL_API_KEY_MODEL)
+            .filter(
+                CREDENTIAL_API_KEY_MODEL.system_code == "payway",
+                CREDENTIAL_API_KEY_MODEL.deleted_datetime.is_(None),
+                CREDENTIAL_API_KEY_MODEL.status_code.in_(["active", "ACTIVE"]),
+            )
+            .all()
+        )
+        for row in cred_rows:
+            if row.key_name == "merchant_id" and row.key_value:
+                merchant_id = row.key_value
+            elif row.key_name == "public_key" and row.key_value:
+                public_key = row.key_value
+    finally:
+        session.close()
+
+    return PayWayConfig(
+        merchant_id=merchant_id,
+        public_key=public_key,
+        base_url=base_url.rstrip("/"),
+    )
 
 
 # ── Status code mapping ──────────────────────────────────────────────────────
@@ -102,6 +163,7 @@ def _generate_qr_hash(
     payout: str,
     lifetime: str,
     qr_image_template: str,
+    public_key: Optional[str] = None,
 ) -> str:
     """HMAC-SHA512 over the 19 concatenated fields documented for /generate-qr."""
     data = (
@@ -125,7 +187,9 @@ def _generate_qr_hash(
         + lifetime
         + qr_image_template
     )
-    return _hmac_sha512_b64(settings.PAYWAY_PUBLIC_KEY, data)
+    if not public_key:
+        raise ValueError("PayWay public_key is required for signing but is not configured in DB (auth.credential_api_key)")
+    return _hmac_sha512_b64(public_key, data)
 
 
 def _purchase_hash(
@@ -153,6 +217,7 @@ def _purchase_hash(
     additional_params: str,
     google_pay_token: str,
     skip_success_page: str,
+    public_key: Optional[str] = None,
 ) -> str:
     """HMAC-SHA512 over the 24 concatenated fields documented for /purchase."""
     data = (
@@ -181,19 +246,25 @@ def _purchase_hash(
         + google_pay_token
         + skip_success_page
     )
-    return _hmac_sha512_b64(settings.PAYWAY_PUBLIC_KEY, data)
+    if not public_key:
+        raise ValueError("PayWay public_key is required for signing but is not configured in DB (auth.credential_api_key)")
+    return _hmac_sha512_b64(public_key, data)
 
 
-def _check_hash(req_time: str, merchant_id: str, tran_id: str) -> str:
+def _check_hash(req_time: str, merchant_id: str, tran_id: str, public_key: Optional[str] = None) -> str:
     """HMAC-SHA512 for Check Transaction: req_time + merchant_id + tran_id."""
     data = req_time + merchant_id + tran_id
-    return _hmac_sha512_b64(settings.PAYWAY_PUBLIC_KEY, data)
+    if not public_key:
+        raise ValueError("PayWay public_key is required for signing but is not configured in DB (auth.credential_api_key)")
+    return _hmac_sha512_b64(public_key, data)
 
 
-def _close_hash(req_time: str, merchant_id: str, tran_id: str) -> str:
+def _close_hash(req_time: str, merchant_id: str, tran_id: str, public_key: Optional[str] = None) -> str:
     """HMAC-SHA512 for Close Transaction: req_time + merchant_id + tran_id."""
     data = req_time + merchant_id + tran_id
-    return _hmac_sha512_b64(settings.PAYWAY_PUBLIC_KEY, data)
+    if not public_key:
+        raise ValueError("PayWay public_key is required for signing but is not configured in DB (auth.credential_api_key)")
+    return _hmac_sha512_b64(public_key, data)
 
 
 # ── Client ───────────────────────────────────────────────────────────────────
@@ -201,13 +272,30 @@ def _close_hash(req_time: str, merchant_id: str, tran_id: str) -> str:
 class PayWayClient:
     """Async HTTP client for ABA PayWay."""
 
+    def __init__(self) -> None:
+        self._cached_config: Optional[PayWayConfig] = None
+        self._cache_time: float = 0.0
+        self._cache_ttl_seconds: float = 60.0
+
+    def get_config(self) -> PayWayConfig:
+        """Get cached PayWayConfig or refresh from DB if TTL has expired."""
+        now = time.time()
+        if self._cached_config is None or (now - self._cache_time) > self._cache_ttl_seconds:
+            self._cached_config = _load_payway_config()
+            self._cache_time = now
+        return self._cached_config
+
     @property
     def base_url(self) -> str:
-        return settings.PAYWAY_BASE_URL.rstrip("/")
+        return self.get_config().base_url
 
     @property
     def merchant_id(self) -> str:
-        return settings.PAYWAY_MERCHANT_ID
+        return self.get_config().merchant_id
+
+    @property
+    def public_key(self) -> str:
+        return self.get_config().public_key
 
     async def create_khqr(
         self,
@@ -226,6 +314,7 @@ class PayWayClient:
         - qrImage: Pre-rendered base64 PNG data URL
         - abapay_deeplink: Deep link to ABA Mobile app
         """
+        cfg = self.get_config()
         req_time = _req_time()
         amount_str = f"{amount_usd:.2f}"
         items_list = [{"name": item_name[:40], "quantity": 1, "price": amount_str}]
@@ -248,7 +337,7 @@ class PayWayClient:
 
         hash_val = _generate_qr_hash(
             req_time=req_time,
-            merchant_id=self.merchant_id,
+            merchant_id=cfg.merchant_id,
             tran_id=tran_id,
             amount_str=amount_str,
             items_b64=items_b64,
@@ -266,11 +355,12 @@ class PayWayClient:
             payout=payout,
             lifetime=lifetime_min,
             qr_image_template=qr_image_template,
+            public_key=cfg.public_key,
         )
 
         payload = {
             "req_time": req_time,
-            "merchant_id": self.merchant_id,
+            "merchant_id": cfg.merchant_id,
             "tran_id": tran_id,
             "first_name": first_name,
             "last_name": last_name,
@@ -291,7 +381,7 @@ class PayWayClient:
             "hash": hash_val,
         }
 
-        endpoint = f"{self.base_url}/api/payment-gateway/v1/payments/generate-qr"
+        endpoint = f"{cfg.base_url}/api/payment-gateway/v1/payments/generate-qr"
         logger.debug(f"[PayWay] generate-qr tran_id={tran_id} amount={amount_str}")
 
         async with httpx.AsyncClient(timeout=30) as client:
@@ -309,17 +399,18 @@ class PayWayClient:
 
     async def check_transaction(self, tran_id: str) -> dict[str, Any]:
         """Call POST /check-transaction-2 and return response body."""
+        cfg = self.get_config()
         req_time = _req_time()
-        hash_value = _check_hash(req_time, self.merchant_id, tran_id)
+        hash_value = _check_hash(req_time, cfg.merchant_id, tran_id, public_key=cfg.public_key)
 
         payload = {
             "req_time": req_time,
-            "merchant_id": self.merchant_id,
+            "merchant_id": cfg.merchant_id,
             "tran_id": tran_id,
             "hash": hash_value,
         }
 
-        endpoint = f"{self.base_url}/api/payment-gateway/v1/payments/check-transaction-2"
+        endpoint = f"{cfg.base_url}/api/payment-gateway/v1/payments/check-transaction-2"
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(endpoint, json=payload)
 
@@ -329,17 +420,18 @@ class PayWayClient:
 
     async def close_transaction(self, tran_id: str) -> dict[str, Any]:
         """Call POST /close-transaction to cancel a pending QR."""
+        cfg = self.get_config()
         req_time = _req_time()
-        hash_value = _close_hash(req_time, self.merchant_id, tran_id)
+        hash_value = _close_hash(req_time, cfg.merchant_id, tran_id, public_key=cfg.public_key)
 
         payload = {
             "req_time": req_time,
-            "merchant_id": self.merchant_id,
+            "merchant_id": cfg.merchant_id,
             "tran_id": tran_id,
             "hash": hash_value,
         }
 
-        endpoint = f"{self.base_url}/api/payment-gateway/v1/payments/close-transaction"
+        endpoint = f"{cfg.base_url}/api/payment-gateway/v1/payments/close-transaction"
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(endpoint, json=payload)
 
@@ -363,6 +455,7 @@ class PayWayClient:
         Returns:
             (action_url, form_data_dict)
         """
+        cfg = self.get_config()
         req_time = _req_time()
         amount_str = f"{amount_usd:.2f}"
         items_list = [{"name": item_name[:40], "quantity": 1, "price": amount_str}]
@@ -389,7 +482,7 @@ class PayWayClient:
 
         hash_val = _purchase_hash(
             req_time=req_time,
-            merchant_id=self.merchant_id,
+            merchant_id=cfg.merchant_id,
             tran_id=tran_id,
             amount_str=amount_str,
             items_b64=items_b64,
@@ -412,11 +505,12 @@ class PayWayClient:
             additional_params=additional_params,
             google_pay_token=google_pay_token,
             skip_success_page=skip_success_page,
+            public_key=cfg.public_key,
         )
 
         form_data = {
             "req_time": req_time,
-            "merchant_id": self.merchant_id,
+            "merchant_id": cfg.merchant_id,
             "tran_id": tran_id,
             "amount": amount_str,
             "items": items_b64,
@@ -436,22 +530,29 @@ class PayWayClient:
         if callback_url_b64:
             form_data["return_url"] = callback_url_b64
 
-        action_url = f"{self.base_url}/api/payment-gateway/v1/payments/purchase"
+        action_url = f"{cfg.base_url}/api/payment-gateway/v1/payments/purchase"
         return action_url, form_data
 
     async def get_transaction_detail(self, tran_id: str) -> dict[str, Any]:
         """Call POST /transaction-detail to retrieve full transaction metadata."""
+        cfg = self.get_config()
         req_time = _req_time()
-        hash_value = _check_hash(req_time, self.merchant_id, tran_id)
+        hash_value = _check_hash(req_time, cfg.merchant_id, tran_id, public_key=cfg.public_key)
 
         payload = {
             "req_time": req_time,
-            "merchant_id": self.merchant_id,
+            "merchant_id": cfg.merchant_id,
             "tran_id": tran_id,
             "hash": hash_value,
         }
 
-        endpoint = f"{self.base_url}/api/payment-gateway/v1/payments/transaction-detail"
+        endpoint = f"{cfg.base_url}/api/payment-gateway/v1/payments/transaction-detail"
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(endpoint, json=payload)
+
+        body = resp.json()
+        logger.debug(f"[PayWay] transaction-detail HTTP {resp.status_code} tran_id={tran_id}")
+        return body
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(endpoint, json=payload)
 
