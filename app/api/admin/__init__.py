@@ -36,12 +36,14 @@ from app.api.v1.handlers.log_handler import router as log_router
 from app.api.v1.handlers.system_handler import router as system_router
 from app.api.v1.handlers.telegram_handler import router as telegram_router
 from app.api.v1.handlers.payment_gateway_handler import router as payment_gateway_router
+from app.api.v1.handlers.translation_handler import router as translation_router
 
 # Root lane router
 admin_router = APIRouter(prefix="/api/admin/v1", tags=["[Admin Lane]"])
 
-# ── Public within lane: auth (login/refresh/logout/me) ─────────────────────
+# ── Public within lane: auth & translations ────────────────────────────────
 admin_router.include_router(auth_router)
+admin_router.include_router(translation_router)
 
 # ── Protected: all other endpoints require admin or manager role ───────────
 _protected = APIRouter(dependencies=[Depends(require_admin_or_manager)])

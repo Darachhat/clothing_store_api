@@ -87,6 +87,39 @@ async def create_product(
     return await PRODUCT_SERVICE.create_product(db=db, body=body)
 
 
+@router.get("/variants", response_model=list[PRODUCT_VARIANT_RESPONSE_SCHEMA])
+async def list_all_variants_alias(
+    q            : str | None   = Query(None)
+    , product_id : UUID | None  = None
+    , color_id   : UUID | None  = None
+    , size_id    : UUID | None  = None
+    , skip       : int          = Query(0, ge=0)
+    , limit      : int          = Query(50, le=500)
+    , db         : AsyncSession = Depends(get_db)
+    , _          : User         = Depends(require_permission("product.read"))
+) -> list[PRODUCT_VARIANT_RESPONSE_SCHEMA]:
+    """List all variants across products (alias for /product-variants to support /products/variants)."""
+    return await PRODUCT_SERVICE.list_variants(
+        db           = db
+        , q          = q
+        , product_id = product_id
+        , color_id   = color_id
+        , size_id    = size_id
+        , skip       = skip
+        , limit      = limit
+    )
+
+
+@router.post("/variants", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
+async def create_variant_alias(
+    body : PRODUCT_VARIANT_CREATE_SCHEMA
+    , db : AsyncSession = Depends(get_db)
+    , _  : User         = Depends(require_permission("product.create"))
+) -> PRODUCT_VARIANT_RESPONSE_SCHEMA:
+    """Create a variant (alias for /product-variants to support /products/variants)."""
+    return await PRODUCT_SERVICE.create_variant(db=db, body=body)
+
+
 @router.get("/{id}", response_model=PRODUCT_WITH_VARIANTS_SCHEMA)
 async def get_product(
     id   : UUID

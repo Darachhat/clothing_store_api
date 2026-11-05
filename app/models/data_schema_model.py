@@ -419,9 +419,6 @@ class STOCK_TRANSFER_MODEL(BASE_MODEL):
         UUID(as_uuid=True), ForeignKey("data.warehouses.id", ondelete="RESTRICT"), nullable=False
     )
     notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
-    created_by_user_id          : Mapped[Optional[uuid.UUID]]       = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="RESTRICT"), nullable=True
-    )
     approved_by                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL"), nullable=True
     )
@@ -479,9 +476,6 @@ class PURCHASE_ORDER_MODEL(BASE_MODEL):
     total                       : Mapped[Decimal]                   = mapped_column(Numeric(12, 2), nullable=False, default=0)
     expected_date               : Mapped[Optional[date]]            = mapped_column(Date, nullable=True)
     notes                       : Mapped[Optional[str]]             = mapped_column(Text, nullable=True)
-    created_by_user_id          : Mapped[Optional[uuid.UUID]]       = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="RESTRICT"), nullable=True
-    )
     approved_by                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL"), nullable=True
     )
@@ -900,9 +894,6 @@ class EXPENSE_MODEL(BASE_MODEL):
     payment_method              : Mapped[str]                       = mapped_column(String(30), nullable=False)
     receipt_url                 : Mapped[Optional[str]]             = mapped_column(String(500), nullable=True)
     expense_date                : Mapped[date]                      = mapped_column(Date, nullable=False)
-    created_by_user_id          : Mapped[Optional[uuid.UUID]]       = mapped_column(
-        UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="RESTRICT"), nullable=True
-    )
     approved_by                 : Mapped[Optional[uuid.UUID]]       = mapped_column(
         UUID(as_uuid=True), ForeignKey("data.users.id", ondelete="SET NULL"), nullable=True
     )

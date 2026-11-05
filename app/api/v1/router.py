@@ -31,12 +31,14 @@ from app.api.v1.handlers.sale_handler import returns_router, router as sales_rou
 from app.api.v1.handlers.scanner_handler import router as scanner_router
 from app.api.v1.handlers.user_handler import roles_router, users_router
 from app.api.v1.handlers.audit_handler import router as audit_router
+from app.api.v1.handlers.translation_handler import router as translation_router
 
 router = APIRouter()
 
 # Core Template Handlers
 router.include_router(health_router)
 router.include_router(auth_router)
+router.include_router(translation_router)
 # System clients/credentials, Telegram bots/chats and system logs are infrastructure
 # management surfaces: require the `settings.manage` permission (ADMIN).
 _system_admin = [Depends(require_system_admin)]
