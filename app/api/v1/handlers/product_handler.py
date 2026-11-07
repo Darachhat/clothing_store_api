@@ -25,8 +25,9 @@ from app.schemas.product_schema import (
 from app.services.product_service import PRODUCT_SERVICE
 from app.utils.qr import generate_barcode_png, generate_barcode_svg, generate_qr_png, generate_qr_svg
 
-router         = APIRouter(prefix="/products", tags=["Products"])
-variant_router = APIRouter(prefix="/product-variants", tags=["Product Variants"])
+router                      = APIRouter(prefix="/products", tags=["Products"])
+variant_router              = APIRouter(prefix="/product-variants", tags=["Product Variants"])
+public_variant_media_router = APIRouter(prefix="/product-variants", tags=["Product Variants"])
 
 
 # ─── Products ─────────────────────────────────────────────────────────────────
@@ -275,6 +276,7 @@ async def get_variant(
     return await PRODUCT_SERVICE.get_variant(db=db, variant_id=id)
 
 
+@public_variant_media_router.get("/{id}/qr")
 @variant_router.get("/{id}/qr")
 async def get_variant_qr(
     id       : UUID
@@ -290,6 +292,7 @@ async def get_variant_qr(
         return Response(content=content, media_type="image/png")
 
 
+@public_variant_media_router.get("/{id}/barcode")
 @variant_router.get("/{id}/barcode")
 async def get_variant_barcode(
     id           : UUID

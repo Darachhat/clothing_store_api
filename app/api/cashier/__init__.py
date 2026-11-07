@@ -27,7 +27,7 @@ from app.api.v1.endpoints.catalog import (
 from app.api.v1.endpoints.customers import router as customers_router
 from app.api.v1.endpoints.inventory import router as inventory_router
 from app.api.v1.endpoints.labels import router as labels_router
-from app.api.v1.endpoints.products import router as products_router
+from app.api.v1.endpoints.products import public_variant_media_router, router as products_router
 from app.api.v1.endpoints.products import variant_router
 from app.api.v1.endpoints.promotions import router as promotions_router
 from app.api.v1.endpoints.sales import returns_router, router as sales_router
@@ -40,10 +40,11 @@ from app.api.v1.handlers.translation_handler import router as translation_router
 # Root lane router
 cashier_router = APIRouter(prefix="/api/cashier/v1", tags=["[Cashier Lane]"])
 
-# ── Public within lane: auth, translations & public brand profile ───────────
+# ── Public within lane: auth, translations, public brand profile & barcode/QR SVGs ──
 cashier_router.include_router(auth_router)
 cashier_router.include_router(translation_router)
 cashier_router.include_router(public_brand_router)
+cashier_router.include_router(public_variant_media_router)
 
 # ── Protected: CASHIER role required ──────────────────────────────────────
 _protected = APIRouter(dependencies=[Depends(require_cashier)])

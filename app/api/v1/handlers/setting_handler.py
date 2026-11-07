@@ -19,7 +19,7 @@ from app.schemas.setting_schema import (
 )
 
 router = APIRouter(prefix="/settings", tags=["Store Settings"])
-public_brand_router = APIRouter(prefix="/brand", tags=["Brand & Identity"])
+public_brand_router = APIRouter(tags=["Brand & Identity"])
 
 DEFAULT_STICKER_CONFIG: Dict[str, Any] = {
     "paper_size": "THERMAL_50x30",
@@ -133,13 +133,23 @@ async def resolve_brand_settings(db: AsyncSession) -> dict:
     return merged
 
 
-@public_brand_router.get("", response_model=BRAND_SETTINGS_SCHEMA)
-@public_brand_router.get("/public", response_model=BRAND_SETTINGS_SCHEMA)
+@public_brand_router.get("/brand", response_model=BRAND_SETTINGS_SCHEMA)
+@public_brand_router.get("/brand/public", response_model=BRAND_SETTINGS_SCHEMA)
+@public_brand_router.get("/settings/brand", response_model=BRAND_SETTINGS_SCHEMA)
+@public_brand_router.get("/settings/brand/public", response_model=BRAND_SETTINGS_SCHEMA)
 async def get_public_brand_profile(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Public read-only brand & logo profile for login screens, customer displays, and web storefronts."""
     return await resolve_brand_settings(db)
+
+
+@public_brand_router.get("/settings/sticker/public", response_model=STICKER_TEMPLATE_SCHEMA)
+async def get_public_sticker_profile(
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Public read-only product sticker template configuration."""
+    return await resolve_sticker_settings(db)
 
 
 @router.get("/brand/public", response_model=BRAND_SETTINGS_SCHEMA)
