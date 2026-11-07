@@ -36,7 +36,8 @@ roles_router = APIRouter(prefix="/roles", tags=["Role & Permission Administratio
 
 
 # ── User Endpoints ────────────────────────────────────────────────────────────
-@users_router.get("", response_model=list[USER_RESPONSE_SCHEMA])
+@users_router.get("", response_model=list[USER_RESPONSE_SCHEMA], include_in_schema=False)
+@users_router.get("/", response_model=list[USER_RESPONSE_SCHEMA])
 async def list_users(
     branch_id: UUID | None = None,
     user_status: str | None = Query(None, alias="status"),
@@ -63,7 +64,8 @@ async def list_users(
     return users
 
 
-@users_router.post("", response_model=USER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
+@users_router.post("", response_model=USER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@users_router.post("/", response_model=USER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_user(
     payload: USER_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
@@ -402,7 +404,8 @@ async def deactivate_user(
 
 
 # ── Role Endpoints ────────────────────────────────────────────────────────────
-@roles_router.get("", response_model=list[ROLE_RESPONSE_SCHEMA])
+@roles_router.get("", response_model=list[ROLE_RESPONSE_SCHEMA], include_in_schema=False)
+@roles_router.get("/", response_model=list[ROLE_RESPONSE_SCHEMA])
 async def list_roles(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("user.manage")),
@@ -420,7 +423,8 @@ async def list_permissions(
     return await repo.get_all_permissions()
 
 
-@roles_router.post("", response_model=ROLE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
+@roles_router.post("", response_model=ROLE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@roles_router.post("/", response_model=ROLE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_role(
     payload: ROLE_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),

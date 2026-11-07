@@ -23,7 +23,8 @@ from app.services.misc_service import PROMOTION_SERVICE
 router = APIRouter(prefix="/promotions", tags=["Promotions & Discounts"])
 
 
-@router.get("", response_model=list[PROMOTION_RESPONSE_SCHEMA])
+@router.get("", response_model=list[PROMOTION_RESPONSE_SCHEMA], include_in_schema=False)
+@router.get("/", response_model=list[PROMOTION_RESPONSE_SCHEMA])
 async def list_promotions(
     active_only: bool = False,
     promo_status: str | None = Query(None, alias="status"),
@@ -42,7 +43,8 @@ async def list_promotions(
     return list(items)
 
 
-@router.post("", response_model=PROMOTION_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PROMOTION_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/", response_model=PROMOTION_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_promotion(
     payload: PROMOTION_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),

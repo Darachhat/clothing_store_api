@@ -26,7 +26,8 @@ router = APIRouter(prefix="/purchases", tags=["Purchasing & Goods Receipts"])
 
 
 # ── Purchase Orders ───────────────────────────────────────────────────────────
-@router.get("", response_model=list[PURCHASE_ORDER_RESPONSE_SCHEMA])
+@router.get("", response_model=list[PURCHASE_ORDER_RESPONSE_SCHEMA], include_in_schema=False)
+@router.get("/", response_model=list[PURCHASE_ORDER_RESPONSE_SCHEMA])
 async def list_purchase_orders(
     supplier_id: UUID | None = None,
     branch_id: UUID | None = None,
@@ -53,7 +54,8 @@ async def list_purchase_orders(
     return list(orders)
 
 
-@router.post("", response_model=PURCHASE_ORDER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PURCHASE_ORDER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/", response_model=PURCHASE_ORDER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_purchase_order(
     payload: PURCHASE_ORDER_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),

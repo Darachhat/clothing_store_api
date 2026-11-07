@@ -27,7 +27,7 @@ from app.api.v1.endpoints.promotions import router as promotions_router
 from app.api.v1.endpoints.purchases import router as purchases_router
 from app.api.v1.endpoints.reports import router as reports_router
 from app.api.v1.endpoints.sales import returns_router, router as sales_router
-from app.api.v1.endpoints.settings import router as settings_router
+from app.api.v1.endpoints.settings import public_brand_router, router as settings_router
 from app.api.v1.endpoints.shifts import router as shifts_router
 from app.api.v1.endpoints.terminals import router as terminals_router
 from app.api.v1.endpoints.users import roles_router, users_router
@@ -41,9 +41,10 @@ from app.api.v1.handlers.translation_handler import router as translation_router
 # Root lane router
 admin_router = APIRouter(prefix="/api/admin/v1", tags=["[Admin Lane]"])
 
-# ── Public within lane: auth & translations ────────────────────────────────
+# ── Public within lane: auth, translations & public brand profile ───────────
 admin_router.include_router(auth_router)
 admin_router.include_router(translation_router)
+admin_router.include_router(public_brand_router)
 
 # ── Protected: all other endpoints require admin or manager role ───────────
 _protected = APIRouter(dependencies=[Depends(require_admin_or_manager)])

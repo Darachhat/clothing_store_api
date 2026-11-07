@@ -142,6 +142,7 @@ async def create_adjustment(
 transfers_router = APIRouter(prefix="/inventory/transfers", tags=["Stock Transfers"])
 
 
+@transfers_router.get("", response_model=list[STOCK_TRANSFER_RESPONSE_SCHEMA], include_in_schema=False)
 @transfers_router.get("/", response_model=list[STOCK_TRANSFER_RESPONSE_SCHEMA])
 async def list_transfers(
     skip: int = 0,
@@ -159,6 +160,7 @@ async def list_transfers(
     return list(result.scalars().all())
 
 
+@transfers_router.post("", response_model=STOCK_TRANSFER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @transfers_router.post("/", response_model=STOCK_TRANSFER_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_transfer(
     body: STOCK_TRANSFER_CREATE_SCHEMA,

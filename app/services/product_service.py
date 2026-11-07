@@ -184,7 +184,8 @@ class PRODUCT_SERVICE:
         )
         await cls.increment_catalog_version(db)
         await db.commit()
-        return product
+        created = await repo.get_with_variants(product.id)
+        return created or product
 
     @classmethod
     async def get_product(cls, db: AsyncSession, product_id: UUID) -> Product:
@@ -214,7 +215,8 @@ class PRODUCT_SERVICE:
         )
         await cls.increment_catalog_version(db)
         await db.commit()
-        return product
+        updated = await repo.get_with_variants(product.id)
+        return updated or product
 
     @classmethod
     async def delete_product(cls, db: AsyncSession, product_id: UUID) -> None:

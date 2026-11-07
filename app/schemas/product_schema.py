@@ -215,7 +215,7 @@ class PRODUCT_VARIANT_CREATE_SCHEMA(BaseModel):
     product_id      : uuid.UUID
     color_id        : Optional[uuid.UUID] = None
     size_id         : Optional[uuid.UUID] = None
-    cost_price      : Decimal             = Field(gt=0)
+    cost_price      : Decimal             = Field(default=Decimal("0.00"), ge=0)
     selling_price   : Decimal             = Field(gt=0)
     wholesale_price : Optional[Decimal]   = None
     barcode         : Optional[str]       = None
@@ -230,7 +230,7 @@ class PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA(BaseModel):
     product_id      : Optional[uuid.UUID] = None
     color_id        : Optional[uuid.UUID] = None
     size_id         : Optional[uuid.UUID] = None
-    cost_price      : Decimal             = Field(gt=0)
+    cost_price      : Decimal             = Field(default=Decimal("0.00"), ge=0)
     selling_price   : Decimal             = Field(gt=0)
     wholesale_price : Optional[Decimal]   = None
     barcode         : Optional[str]       = None
@@ -242,13 +242,15 @@ class PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA(BaseModel):
 
 
 class PRODUCT_VARIANT_UPDATE_SCHEMA(BaseModel):
-    cost_price      : Optional[Decimal] = None
-    selling_price   : Optional[Decimal] = None
-    wholesale_price : Optional[Decimal] = None
-    barcode         : Optional[str]     = None
-    weight_grams    : Optional[int]     = None
-    image_url       : Optional[str]     = None
-    status_code     : Optional[str]     = None
+    color_id        : Optional[uuid.UUID] = None
+    size_id         : Optional[uuid.UUID] = None
+    cost_price      : Optional[Decimal]   = None
+    selling_price   : Optional[Decimal]   = None
+    wholesale_price : Optional[Decimal]   = None
+    barcode         : Optional[str]       = None
+    weight_grams    : Optional[int]       = None
+    image_url       : Optional[str]       = None
+    status_code     : Optional[str]       = None
 
     model_config = {"from_attributes": True}
 

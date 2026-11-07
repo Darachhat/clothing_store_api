@@ -78,6 +78,7 @@ async def list_products(
     return data
 
 
+@router.post("", response_model=PRODUCT_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @router.post("/", response_model=PRODUCT_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_product(
     body           : PRODUCT_CREATE_SCHEMA
@@ -172,6 +173,7 @@ async def delete_product(
 
 
 # ─── Product Variants ─────────────────────────────────────────────────────────
+@variant_router.get("", response_model=list[PRODUCT_VARIANT_RESPONSE_SCHEMA], include_in_schema=False)
 @variant_router.get("/", response_model=list[PRODUCT_VARIANT_RESPONSE_SCHEMA])
 async def list_variants(
     q            : str | None   = Query(None)
@@ -194,6 +196,7 @@ async def list_variants(
     )
 
 
+@variant_router.post("", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 @variant_router.post("/", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_variant(
     body : PRODUCT_VARIANT_CREATE_SCHEMA

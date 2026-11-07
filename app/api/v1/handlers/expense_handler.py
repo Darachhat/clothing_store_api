@@ -94,7 +94,8 @@ async def delete_category(
 
 
 # ── Expenses ──────────────────────────────────────────────────────────────────
-@router.get("", response_model=list[EXPENSE_RESPONSE_SCHEMA])
+@router.get("", response_model=list[EXPENSE_RESPONSE_SCHEMA], include_in_schema=False)
+@router.get("/", response_model=list[EXPENSE_RESPONSE_SCHEMA])
 async def list_expenses(
     branch_id: UUID | None = None,
     category_id: UUID | None = None,
@@ -119,7 +120,8 @@ async def list_expenses(
     return list(expenses)
 
 
-@router.post("", response_model=EXPENSE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=EXPENSE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/", response_model=EXPENSE_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_expense(
     payload: EXPENSE_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),

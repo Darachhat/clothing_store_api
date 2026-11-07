@@ -201,11 +201,11 @@ logger.info(f"Configuring static uploads path: {uploads_dir}")
 async def serve_uploads(file_path: str):
     """Serve uploaded media from local disk or stream directly from Cloudflare R2."""
     clean_path = file_path.strip("/\\")
-    local_target = os.path.join(uploads_dir, clean_path)
-
-    # 1. High-speed local disk serving
-    if os.path.isfile(local_target):
-        return FileResponse(local_target)
+    search_dirs = [uploads_dir, os.path.abspath(settings.UPLOAD_DIR)]
+    for d in search_dirs:
+        local_target = os.path.join(d, clean_path)
+        if os.path.isfile(local_target):
+            return FileResponse(local_target)
 
     # 2. Cloudflare R2 fallback streaming
     if R2_SERVICE.is_configured():

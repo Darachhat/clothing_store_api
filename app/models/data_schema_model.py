@@ -289,9 +289,9 @@ class PRODUCT_MODEL(BASE_MODEL):
     image_url                   : Mapped[Optional[str]]             = mapped_column(String(500), nullable=True)
     status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
-    category                    : Mapped[Optional[CATEGORY_MODEL]]  = relationship("CATEGORY_MODEL", back_populates="products")
-    brand                       : Mapped[Optional[BRAND_MODEL]]     = relationship("BRAND_MODEL", back_populates="products")
-    supplier                    : Mapped[Optional[SUPPLIER_MODEL]]  = relationship("SUPPLIER_MODEL", back_populates="products")
+    category                    : Mapped[Optional[CATEGORY_MODEL]]  = relationship("CATEGORY_MODEL", back_populates="products", lazy="selectin")
+    brand                       : Mapped[Optional[BRAND_MODEL]]     = relationship("BRAND_MODEL", back_populates="products", lazy="selectin")
+    supplier                    : Mapped[Optional[SUPPLIER_MODEL]]  = relationship("SUPPLIER_MODEL", back_populates="products", lazy="selectin")
     variants                    : Mapped[list[PRODUCT_VARIANT_MODEL]] = relationship(
         "PRODUCT_VARIANT_MODEL", back_populates="product", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -326,8 +326,8 @@ class PRODUCT_VARIANT_MODEL(BASE_MODEL):
     status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
     product                     : Mapped[PRODUCT_MODEL]             = relationship("PRODUCT_MODEL", back_populates="variants")
-    color                       : Mapped[Optional[COLOR_MODEL]]     = relationship("COLOR_MODEL", back_populates="variants")
-    size                        : Mapped[Optional[SIZE_MODEL]]      = relationship("SIZE_MODEL", back_populates="variants")
+    color                       : Mapped[Optional[COLOR_MODEL]]     = relationship("COLOR_MODEL", back_populates="variants", lazy="selectin")
+    size                        : Mapped[Optional[SIZE_MODEL]]      = relationship("SIZE_MODEL", back_populates="variants", lazy="selectin")
     inventory_stocks            : Mapped[list[INVENTORY_STOCK_MODEL]] = relationship(
         "INVENTORY_STOCK_MODEL", back_populates="variant"
     )

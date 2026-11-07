@@ -27,6 +27,7 @@ class RECEIPT_TEMPLATE_SCHEMA(BaseModel):
     store_name: str = Field(default="VANNAK CLOTHING BOUTIQUE", max_length=150)
     store_name_kh: str = Field(default="គឹម វណ្ណាក់ ហាងលក់សម្លៀកបំពាក់", max_length=150)
     tagline: Optional[str] = Field(default="Premium Streetwear & Contemporary Fashion", max_length=200)
+    logo_url: Optional[str] = Field(default="", max_length=500)
     phone: Optional[str] = Field(default="+855 23 888 999", max_length=50)
     address: Optional[str] = Field(default="#123 Preah Norodom Blvd, Daun Penh, Phnom Penh", max_length=255)
     tax_id: Optional[str] = Field(default="K001-902348572", max_length=50)
@@ -43,6 +44,25 @@ class RECEIPT_TEMPLATE_SCHEMA(BaseModel):
     )
     wifi_info: Optional[str] = Field(default="Guest Wi-Fi: Vannak_Store | Pass: fashion2026", max_length=100)
     qr_content: Optional[str] = Field(default="https://kimvannak.store", max_length=255)
+
+    model_config = {"from_attributes": True}
+
+
+class BRAND_SETTINGS_SCHEMA(BaseModel):
+    store_name: str = Field(default="KIM VANNAK CLOTHING", max_length=150)
+    store_name_kh: str = Field(default="គឹម វណ្ណាក់ ហាងលក់សម្លៀកបំពាក់", max_length=150)
+    tagline: Optional[str] = Field(default="Premium Streetwear & Contemporary Fashion", max_length=200)
+    tagline_kh: Optional[str] = Field(default="សម្លៀកបំពាក់ទាន់សម័យ និងគុណភាពខ្ពស់", max_length=200)
+    logo_url: Optional[str] = Field(default="", max_length=500, description="Primary brand logo (light surfaces)")
+    logo_dark_url: Optional[str] = Field(default="", max_length=500, description="Brand logo (dark surfaces)")
+    favicon_url: Optional[str] = Field(default="", max_length=500, description="Browser favicon URL")
+    phone: Optional[str] = Field(default="+855 23 888 999", max_length=50)
+    email: Optional[str] = Field(default="store@kimvannak.store", max_length=100)
+    address: Optional[str] = Field(default="#123 Preah Norodom Blvd, Daun Penh, Phnom Penh", max_length=255)
+    tax_id: Optional[str] = Field(default="K001-902348572", max_length=50)
+    website_url: Optional[str] = Field(default="https://kimvannak.store", max_length=255)
+    receipt_footer: Optional[str] = Field(default="THANK YOU FOR SHOPPING WITH US!\nសូមអរគុណដែលបានគាំទ្រហាងយើងខ្ញុំ!", max_length=255)
+    return_policy: Optional[str] = Field(default="ទំនិញទិញរួចមិនអាចប្តូរប្រាក់វិញបានទេ (Exchange within 7 days with tag/receipt)", max_length=500)
 
     model_config = {"from_attributes": True}
 
