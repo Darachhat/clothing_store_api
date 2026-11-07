@@ -14,11 +14,30 @@ from app.schemas.setting_schema import (
     BRAND_SETTINGS_SCHEMA,
     GENERIC_SETTING_SCHEMA,
     RECEIPT_TEMPLATE_SCHEMA,
+    STICKER_TEMPLATE_SCHEMA,
     STORE_SETTINGS_SCHEMA,
 )
 
 router = APIRouter(prefix="/settings", tags=["Store Settings"])
 public_brand_router = APIRouter(prefix="/brand", tags=["Brand & Identity"])
+
+DEFAULT_STICKER_CONFIG: Dict[str, Any] = {
+    "paper_size": "THERMAL_50x30",
+    "label_width_mm": 50.0,
+    "label_height_mm": 30.0,
+    "columns": 1,
+    "code_type": "BARCODE",
+    "store_header": "គឹម វណ្ណាក់ ហាងលក់សម្លៀកបំពាក់",
+    "show_store_header": True,
+    "show_product_name": True,
+    "show_sku": True,
+    "show_variant_attrs": True,
+    "show_price_usd": True,
+    "show_khr": True,
+    "khr_exchange_rate": 4100,
+    "footer_note": "",
+    "default_copies": 1,
+}
 
 DEFAULT_BRAND_CONFIG: Dict[str, Any] = {
     "store_name": "KIM VANNAK CLOTHING",
@@ -134,7 +153,6 @@ async def get_public_brand_settings(
 @router.get("/brand", response_model=BRAND_SETTINGS_SCHEMA)
 async def get_brand_settings(
     db: AsyncSession = Depends(get_db),
-    _: User = Depends(get_current_active_user),
 ) -> dict:
     """Get authoritative brand and logo identity configuration (One Stop source)."""
     return await resolve_brand_settings(db)
@@ -353,6 +371,82 @@ async def update_receipt_settings(
     return await get_receipt_settings(db=db, _=_)
 
 
+async def resolve_sticker_settings(db: AsyncSession) -> dict:
+    """Resolve layered sticker/label template settings: Defaults -> Brand Profile -> Saved Sticker Template."""
+    brand_cfg = await resolve_brand_settings(db)
+    merged = dict(DEFAULT_STICKER_CONFIG)
+    brand_header = (
+        brand_cfg.get("store_name_kh")
+        or brand_cfg.get("store_name")
+        or DEFAULT_STICKER_CONFIG["store_header"]
+    )
+    merged["store_header"] = brand_header
+
+    stmt = select(SystemSetting).where(
+        SystemSetting.category.in_(["sticker", "label"]),
+        SystemSetting.key.in_(["template", "sticker_template", "config"]),
+    )
+    records = (await db.execute(stmt)).scalars().all()
+    for r in records:
+        if isinstance(r.value, dict):
+            for k, v in r.value.items():
+                if v is not None:
+                    merged[k] = v
+
+    if not merged.get("store_header"):
+        merged["store_header"] = brand_header
+
+    return merged
+
+
+@router.get("/sticker/public", response_model=STICKER_TEMPLATE_SCHEMA)
+async def get_public_sticker_settings(
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Public/Cashier read-only product sticker & label template configuration."""
+    return await resolve_sticker_settings(db)
+
+
+@router.get("/sticker", response_model=STICKER_TEMPLATE_SCHEMA)
+async def get_sticker_settings(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_active_user),
+) -> dict:
+    """Get authoritative product sticker & label template configuration (One Stop backend source)."""
+    return await resolve_sticker_settings(db)
+
+
+@router.put("/sticker", response_model=STICKER_TEMPLATE_SCHEMA)
+@router.post("/sticker", response_model=STICKER_TEMPLATE_SCHEMA, include_in_schema=False)
+async def update_sticker_settings(
+    body: STICKER_TEMPLATE_SCHEMA,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("product.write")),
+) -> dict:
+    """Update product sticker & label template configuration."""
+    stmt = select(SystemSetting).where(
+        SystemSetting.category == "sticker",
+        SystemSetting.key == "template",
+    )
+    record = (await db.execute(stmt)).scalar_one_or_none()
+    target_data = body.model_dump()
+
+    if record:
+        record.value = target_data
+        record.description = "Product sticker and barcode/QR label template configuration"
+    else:
+        record = SystemSetting(
+            category="sticker",
+            key="template",
+            value=target_data,
+            description="Product sticker and barcode/QR label template configuration",
+        )
+        db.add(record)
+
+    await db.commit()
+    return await resolve_sticker_settings(db)
+
+
 @router.get("/store", response_model=STORE_SETTINGS_SCHEMA)
 async def get_store_settings(
     db: AsyncSession = Depends(get_db),
@@ -454,6 +548,8 @@ async def get_category_settings(
     """Retrieve raw settings dictionary for any category."""
     if category == "receipt":
         return await get_receipt_settings(db=db, _=_)
+    if category == "sticker":
+        return await resolve_sticker_settings(db=db)
 
     stmt = select(SystemSetting).where(SystemSetting.category == category)
     result = await db.execute(stmt)

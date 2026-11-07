@@ -67,6 +67,26 @@ class BRAND_SETTINGS_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class STICKER_TEMPLATE_SCHEMA(BaseModel):
+    paper_size: str = Field(default="THERMAL_50x30", max_length=50)
+    label_width_mm: float = Field(default=50.0, ge=25.0, le=120.0)
+    label_height_mm: float = Field(default=30.0, ge=18.0, le=120.0)
+    columns: int = Field(default=1, ge=1, le=6)
+    code_type: str = Field(default="BARCODE", pattern="^(BARCODE|QR)$")
+    store_header: Optional[str] = Field(default="គឹម វណ្ណាក់ ហាងលក់សម្លៀកបំពាក់", max_length=150)
+    show_store_header: bool = True
+    show_product_name: bool = True
+    show_sku: bool = True
+    show_variant_attrs: bool = True
+    show_price_usd: bool = True
+    show_khr: bool = True
+    khr_exchange_rate: int = Field(default=4100, ge=100, le=50000)
+    footer_note: Optional[str] = Field(default="", max_length=120)
+    default_copies: int = Field(default=1, ge=1, le=500)
+
+    model_config = {"from_attributes": True}
+
+
 class GENERIC_SETTING_SCHEMA(BaseModel):
     category: str = Field(..., min_length=1, max_length=50)
     key: str = Field(..., min_length=1, max_length=100)

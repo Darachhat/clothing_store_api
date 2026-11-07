@@ -86,6 +86,12 @@ def _draw_single_sticker(
     draw_border: bool = True,
     code_type: str = "BARCODE",
     show_khr: bool = True,
+    show_store_header: bool = True,
+    show_product_name: bool = True,
+    show_sku: bool = True,
+    show_variant_attrs: bool = True,
+    show_price_usd: bool = True,
+    khr_exchange_rate: int = KHR_EXCHANGE_RATE,
 ) -> None:
     """
     Draw Template C: Modern Khmer Product Sticker inside (x, y, label_w, label_h).
@@ -105,59 +111,68 @@ def _draw_single_sticker(
         c.setLineWidth(0.4)
         c.roundRect(x, y, label_w, label_h, radius=1.2 * mm, stroke=1, fill=0)
 
-    # 1. Top Store Header: គឹម វណ្ណាក់ ហាងលក់សម្លៀកបំពាក់ 
     store_fs = 6.5 if is_large else (5.0 if is_compact else 5.5)
     top_y = y + label_h - pad_y - store_fs
-    store_title = label.brand_name.strip() if label.brand_name and label.brand_name != "Clothing Store" else KHMER_STORE_HEADER
-    c.setFillColor(colors.HexColor("#111827"))
-    c.setFont(kh_bold, store_fs)
-    c.drawString(
-        x + pad_x,
-        top_y,
-        _truncate_text(c, store_title, kh_bold, store_fs, inner_w),
-    )
 
-    # Subtle header divider
-    div_y = top_y - 1.2 * mm
-    c.setStrokeColor(colors.HexColor("#E5E7EB"))
-    c.setLineWidth(0.3)
-    c.line(x + pad_x, div_y, x + label_w - pad_x, div_y)
+    if show_store_header:
+        # 1. Top Store Header: គឹម វណ្ណាក់ ហាងលក់សម្លៀកបំពាក់
+        store_title = label.brand_name.strip() if label.brand_name and label.brand_name != "Clothing Store" else KHMER_STORE_HEADER
+        c.setFillColor(colors.HexColor("#111827"))
+        c.setFont(kh_bold, store_fs)
+        c.drawString(
+            x + pad_x,
+            top_y,
+            _truncate_text(c, store_title, kh_bold, store_fs, inner_w),
+        )
+
+        # Subtle header divider
+        div_y = top_y - 1.2 * mm
+        c.setStrokeColor(colors.HexColor("#E5E7EB"))
+        c.setLineWidth(0.3)
+        c.line(x + pad_x, div_y, x + label_w - pad_x, div_y)
+    else:
+        div_y = y + label_h - pad_y
 
     # 2. Product Name (Khmer / English) + Price on right
     prod_fs = 8.0 if is_large else (6.2 if is_compact else 7.0)
     price_fs = 10.5 if is_large else (8.2 if is_compact else 9.2)
     usd_price_str = f"${float(label.selling_price):.2f}"
-    khr_val = int(round(float(label.selling_price) * KHR_EXCHANGE_RATE))
+    rate = khr_exchange_rate if khr_exchange_rate and khr_exchange_rate > 0 else KHR_EXCHANGE_RATE
+    khr_val = int(round(float(label.selling_price) * rate))
     khr_price_str = f"{khr_val:,} ៛"
 
     # Measure price width so product name never overlaps price
     c.setFont("Helvetica-Bold", price_fs)
-    price_w = c.stringWidth(usd_price_str, "Helvetica-Bold", price_fs) + 2.5 * mm
+    price_w = (c.stringWidth(usd_price_str, "Helvetica-Bold", price_fs) + 2.5 * mm) if show_price_usd else 0.0
     prod_max_w = max(12 * mm, inner_w - price_w)
 
     row1_y = div_y - (3.2 if is_large else 2.6) * mm
-    c.setFillColor(colors.HexColor("#111827"))
-    c.setFont(kh_bold, prod_fs)
-    c.drawString(
-        x + pad_x,
-        row1_y,
-        _truncate_text(c, label.product_name or label.sku, kh_bold, prod_fs, prod_max_w),
-    )
+    if show_product_name:
+        c.setFillColor(colors.HexColor("#111827"))
+        c.setFont(kh_bold, prod_fs)
+        c.drawString(
+            x + pad_x,
+            row1_y,
+            _truncate_text(c, label.product_name or label.sku, kh_bold, prod_fs, prod_max_w),
+        )
 
     # Price right-aligned
-    c.setFont("Helvetica-Bold", price_fs)
-    c.drawRightString(x + label_w - pad_x, row1_y - 0.5, usd_price_str)
+    if show_price_usd:
+        c.setFillColor(colors.HexColor("#111827"))
+        c.setFont("Helvetica-Bold", price_fs)
+        c.drawRightString(x + label_w - pad_x, row1_y - 0.5, usd_price_str)
 
     # 3. SKU row + optional KHR price on right
     meta_fs = 6.0 if is_large else (4.8 if is_compact else 5.2)
     row2_y = row1_y - (3.0 if is_large else 2.4) * mm
-    c.setFillColor(colors.HexColor("#374151"))
-    c.setFont("Helvetica", meta_fs)
-    c.drawString(
-        x + pad_x,
-        row2_y,
-        _truncate_text(c, f"SKU: {label.sku}", "Helvetica", meta_fs, prod_max_w),
-    )
+    if show_sku:
+        c.setFillColor(colors.HexColor("#374151"))
+        c.setFont("Helvetica", meta_fs)
+        c.drawString(
+            x + pad_x,
+            row2_y,
+            _truncate_text(c, f"SKU: {label.sku}", "Helvetica", meta_fs, prod_max_w),
+        )
 
     if show_khr:
         c.setFillColor(colors.HexColor("#4B5563"))
@@ -166,16 +181,17 @@ def _draw_single_sticker(
 
     # 4. Khmer Color & Size row: ពណ៌: ខ្មៅ   ទំហំ: ៤០
     row3_y = row2_y - (3.0 if is_large else 2.4) * mm
-    color_val = label.color_name or "—"
-    size_val = label.size_name or "—"
-    variant_line = f"ពណ៌: {color_val}    ទំហំ: {size_val}"
-    c.setFillColor(colors.HexColor("#111827"))
-    c.setFont(kh_reg, meta_fs)
-    c.drawString(
-        x + pad_x,
-        row3_y,
-        _truncate_text(c, variant_line, kh_reg, meta_fs, inner_w),
-    )
+    if show_variant_attrs:
+        color_val = label.color_name or "—"
+        size_val = label.size_name or "—"
+        variant_line = f"ពណ៌: {color_val}    ទំហំ: {size_val}"
+        c.setFillColor(colors.HexColor("#111827"))
+        c.setFont(kh_reg, meta_fs)
+        c.drawString(
+            x + pad_x,
+            row3_y,
+            _truncate_text(c, variant_line, kh_reg, meta_fs, inner_w),
+        )
 
     # 5. Bottom Barcode (Code 128) + Human-readable SKU below barcode
     code_mode = (code_type or "BARCODE").upper()
@@ -228,6 +244,12 @@ def generate_labels_pdf(
     columns: int = 1,
     code_type: str = "BARCODE",
     show_khr: bool = True,
+    show_store_header: bool = True,
+    show_product_name: bool = True,
+    show_sku: bool = True,
+    show_variant_attrs: bool = True,
+    show_price_usd: bool = True,
+    khr_exchange_rate: int = KHR_EXCHANGE_RATE,
 ) -> bytes:
     """Generate a PDF with Khmer product stickers for thermal label rolls or A4/A5 sheets."""
     buffer = io.BytesIO()
@@ -265,6 +287,12 @@ def generate_labels_pdf(
                 draw_border=(page_w > label_w),
                 code_type=code_type,
                 show_khr=show_khr,
+                show_store_header=show_store_header,
+                show_product_name=show_product_name,
+                show_sku=show_sku,
+                show_variant_attrs=show_variant_attrs,
+                show_price_usd=show_price_usd,
+                khr_exchange_rate=khr_exchange_rate,
             )
 
         if not labels:
@@ -310,6 +338,12 @@ def generate_labels_pdf(
             draw_border=True,
             code_type=code_type,
             show_khr=show_khr,
+            show_store_header=show_store_header,
+            show_product_name=show_product_name,
+            show_sku=show_sku,
+            show_variant_attrs=show_variant_attrs,
+            show_price_usd=show_price_usd,
+            khr_exchange_rate=khr_exchange_rate,
         )
 
         col += 1

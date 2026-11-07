@@ -7,11 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1.handlers.setting_handler import resolve_brand_settings, resolve_sticker_settings, update_sticker_settings
 from app.core.database import get_db
 from app.core.deps import require_permission
 from app.models import User
 from app.repositories.product_repository import ProductVariantRepository
 from app.schemas.base_schema import BASE_SCHEMA
+from app.schemas.setting_schema import STICKER_TEMPLATE_SCHEMA
 from app.utils.labels import LabelData, generate_labels_pdf
 
 router = APIRouter(prefix="/labels", tags=["Labels"])
@@ -24,13 +26,38 @@ class LabelVariantRequest(BASE_SCHEMA):
 
 class LabelGenerateRequest(BASE_SCHEMA):
     variants: list[LabelVariantRequest]
-    paper_size: str = "THERMAL_50x30"
-    label_width_mm: float = 50.0
-    label_height_mm: float = 30.0
-    columns: int = 1
-    code_type: str = "BARCODE"  # "BARCODE" | "QR"
-    show_khr: bool = True
+    paper_size: str | None = None
+    label_width_mm: float | None = None
+    label_height_mm: float | None = None
+    columns: int | None = None
+    code_type: str | None = None  # "BARCODE" | "QR"
+    show_khr: bool | None = None
+    show_store_header: bool | None = None
+    show_product_name: bool | None = None
+    show_sku: bool | None = None
+    show_variant_attrs: bool | None = None
+    show_price_usd: bool | None = None
+    khr_exchange_rate: int | None = None
     store_name_override: str | None = None
+
+
+@router.get("/template", response_model=STICKER_TEMPLATE_SCHEMA)
+async def get_label_template_config(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_permission("product.read")),
+) -> dict:
+    """Return active sticker/label template configuration."""
+    return await resolve_sticker_settings(db)
+
+
+@router.put("/template", response_model=STICKER_TEMPLATE_SCHEMA)
+async def update_label_template_config(
+    body: STICKER_TEMPLATE_SCHEMA,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("product.write")),
+) -> dict:
+    """Update active sticker/label template configuration."""
+    return await update_sticker_settings(body=body, db=db, _=current_user)
 
 
 @router.get("/presets")
@@ -83,6 +110,7 @@ async def list_label_presets(
 
 
 @router.post("/generate")
+@router.post("/batch", include_in_schema=False)
 @router.post("/download", include_in_schema=False)
 async def generate_labels(
     body: LabelGenerateRequest,
@@ -92,6 +120,15 @@ async def generate_labels(
     """Generate a PDF with QR code or Code128 barcode stickers for selected variants."""
     repo = ProductVariantRepository(db)
     labels: list[LabelData] = []
+    brand_cfg = await resolve_brand_settings(db)
+    sticker_cfg = await resolve_sticker_settings(db)
+
+    default_store_header = (
+        sticker_cfg.get("store_header")
+        or brand_cfg.get("store_name_kh")
+        or brand_cfg.get("store_name")
+        or "គឹម វណ្ណាក់ ហាងលក់សម្លៀកបំពាក់"
+    )
 
     for item in body.variants:
         variant = await repo.get_by_id(item.variant_id)
@@ -104,7 +141,7 @@ async def generate_labels(
         brand_or_store = (
             body.store_name_override.strip()
             if body.store_name_override and body.store_name_override.strip()
-            else "គឹម វណ្ណាក់ ហាងលក់សម្លៀកបំពាក់ "
+            else default_store_header
         )
 
         label = LabelData(
@@ -121,12 +158,18 @@ async def generate_labels(
 
     pdf_bytes = generate_labels_pdf(
         labels=labels,
-        paper_size=body.paper_size,
-        label_width_mm=body.label_width_mm,
-        label_height_mm=body.label_height_mm,
-        columns=body.columns,
-        code_type=body.code_type,
-        show_khr=body.show_khr,
+        paper_size=body.paper_size or str(sticker_cfg.get("paper_size", "THERMAL_50x30")),
+        label_width_mm=float(body.label_width_mm if body.label_width_mm is not None else sticker_cfg.get("label_width_mm", 50.0)),
+        label_height_mm=float(body.label_height_mm if body.label_height_mm is not None else sticker_cfg.get("label_height_mm", 30.0)),
+        columns=int(body.columns if body.columns is not None else sticker_cfg.get("columns", 1)),
+        code_type=body.code_type or str(sticker_cfg.get("code_type", "BARCODE")),
+        show_khr=bool(body.show_khr if body.show_khr is not None else sticker_cfg.get("show_khr", True)),
+        show_store_header=bool(body.show_store_header if body.show_store_header is not None else sticker_cfg.get("show_store_header", True)),
+        show_product_name=bool(body.show_product_name if body.show_product_name is not None else sticker_cfg.get("show_product_name", True)),
+        show_sku=bool(body.show_sku if body.show_sku is not None else sticker_cfg.get("show_sku", True)),
+        show_variant_attrs=bool(body.show_variant_attrs if body.show_variant_attrs is not None else sticker_cfg.get("show_variant_attrs", True)),
+        show_price_usd=bool(body.show_price_usd if body.show_price_usd is not None else sticker_cfg.get("show_price_usd", True)),
+        khr_exchange_rate=int(body.khr_exchange_rate if body.khr_exchange_rate is not None else sticker_cfg.get("khr_exchange_rate", 4100)),
     )
 
     return Response(

@@ -158,13 +158,15 @@ class SUPPLIER_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
 # ── Product ───────────────────────────────────────────────────────────────────
 
 class PRODUCT_CREATE_SCHEMA(BaseModel):
-    name        : str
-    description : Optional[str]       = None
-    category_id : Optional[uuid.UUID] = None
-    brand_id    : Optional[uuid.UUID] = None
-    supplier_id : Optional[uuid.UUID] = None
-    status_code : str                 = "ACTIVE"
-    image_url   : Optional[str]       = None
+    name            : str
+    description     : Optional[str]                                       = None
+    category_id     : Optional[uuid.UUID]                                 = None
+    brand_id        : Optional[uuid.UUID]                                 = None
+    supplier_id     : Optional[uuid.UUID]                                 = None
+    status_code     : str                                                 = "ACTIVE"
+    image_url       : Optional[str]                                       = None
+    initial_variant : Optional[PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA] = None
+    variants        : Optional[List[PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA]] = None
 
     model_config = {"from_attributes": True}
 
@@ -222,6 +224,8 @@ class PRODUCT_VARIANT_CREATE_SCHEMA(BaseModel):
     weight_grams    : Optional[int]       = None
     image_url       : Optional[str]       = None
     status_code     : str                 = "ACTIVE"
+    initial_stock   : int                 = Field(default=0, ge=0)
+    warehouse_id    : Optional[uuid.UUID] = None
 
     model_config = {"from_attributes": True}
 
@@ -237,6 +241,8 @@ class PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA(BaseModel):
     weight_grams    : Optional[int]       = None
     image_url       : Optional[str]       = None
     status_code     : str                 = "ACTIVE"
+    initial_stock   : int                 = Field(default=0, ge=0)
+    warehouse_id    : Optional[uuid.UUID] = None
 
     model_config = {"from_attributes": True}
 
@@ -283,6 +289,18 @@ class PRODUCT_PAGINATION_WITH_VARIANTS_RESPONSE_SCHEMA(BaseModel):
     pagination : PAGINATION_METADATA_SCHEMA
 
 
+class VARIANT_SCAN_RESPONSE_SCHEMA(BaseModel):
+    """Unified scan lookup response for 1D Barcode, 2D QR Code, SKU, or Product Code."""
+    match_type      : str  # "variant" | "product"
+    normalized_code : str
+    variant         : Optional[PRODUCT_VARIANT_RESPONSE_SCHEMA] = None
+    product         : Optional[PRODUCT_WITH_VARIANTS_SCHEMA]    = None
+    variants        : List[PRODUCT_VARIANT_RESPONSE_SCHEMA]     = []
+    total_stock     : int                                       = 0
+
+    model_config = {"from_attributes": True}
+
+
 __all__ = [
     "COLOR_CREATE_SCHEMA",
     "COLOR_UPDATE_SCHEMA",
@@ -310,4 +328,5 @@ __all__ = [
     "PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA",
     "PRODUCT_VARIANT_UPDATE_SCHEMA",
     "PRODUCT_VARIANT_RESPONSE_SCHEMA",
+    "VARIANT_SCAN_RESPONSE_SCHEMA",
 ]

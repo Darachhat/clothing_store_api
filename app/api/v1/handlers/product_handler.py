@@ -20,6 +20,7 @@ from app.schemas.product_schema import (
     , PRODUCT_VARIANT_RESPONSE_SCHEMA
     , PRODUCT_VARIANT_UPDATE_SCHEMA
     , PRODUCT_WITH_VARIANTS_SCHEMA
+    , VARIANT_SCAN_RESPONSE_SCHEMA
 )
 from app.services.product_service import PRODUCT_SERVICE
 from app.utils.qr import generate_barcode_png, generate_barcode_svg, generate_qr_png, generate_qr_svg
@@ -216,8 +217,18 @@ async def delete_variant(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@variant_router.get("/by-qr/{reference}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA)
-@variant_router.get("/qr/{reference}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA, include_in_schema=False)
+@variant_router.get("/scan", response_model=VARIANT_SCAN_RESPONSE_SCHEMA)
+async def scan_variant_or_product(
+    code           : str         = Query(..., description="Scanned 1D barcode, 2D QR code/URL, SKU, or Product code")
+    , warehouse_id : UUID | None = Query(None)
+    , db           : AsyncSession = Depends(get_db)
+    , _            : User         = Depends(get_current_active_user)
+) -> VARIANT_SCAN_RESPONSE_SCHEMA:
+    return await PRODUCT_SERVICE.scan_lookup(db=db, code=code, warehouse_id=warehouse_id)
+
+
+@variant_router.get("/by-qr/{reference:path}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA)
+@variant_router.get("/qr/{reference:path}", response_model=PRODUCT_VARIANT_RESPONSE_SCHEMA, include_in_schema=False)
 async def get_variant_by_qr(
     reference : str
     , db      : AsyncSession = Depends(get_db)

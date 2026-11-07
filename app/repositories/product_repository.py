@@ -3,11 +3,12 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.models import Brand, Category, Color, Product, ProductVariant, Size, Supplier
 from app.repositories.base import BaseRepository
+from app.utils.codes import normalize_scanned_code
 
 
 class ProductRepository(BaseRepository[Product]):
@@ -15,7 +16,21 @@ class ProductRepository(BaseRepository[Product]):
         super().__init__(Product, db)
 
     async def get_by_code(self, code: str) -> Product | None:
-        result = await self.db.execute(select(Product).where(Product.code == code))
+        clean = normalize_scanned_code(code)
+        if not clean:
+            return None
+        result = await self.db.execute(
+            select(Product)
+            .where(func.lower(Product.code) == clean.lower())
+            .options(
+                selectinload(Product.variants).selectinload(ProductVariant.color),
+                selectinload(Product.variants).selectinload(ProductVariant.size),
+                selectinload(Product.variants).selectinload(ProductVariant.inventory_stocks),
+                selectinload(Product.category),
+                selectinload(Product.brand),
+                selectinload(Product.supplier),
+            )
+        )
         return result.scalar_one_or_none()
 
     async def get_with_variants(self, id: UUID) -> Product | None:
@@ -120,7 +135,9 @@ class ProductRepository(BaseRepository[Product]):
 
         need_variant_join = False
         if search:
-            s_clean = search.strip()
+            s_raw = search.strip()
+            s_norm = normalize_scanned_code(s_raw)
+            s_clean = s_norm or s_raw
             need_variant_join = True
             conditions.append(
                 or_(
@@ -129,6 +146,7 @@ class ProductRepository(BaseRepository[Product]):
                     Product.description.ilike(f"%{s_clean}%"),
                     ProductVariant.sku.ilike(f"%{s_clean}%"),
                     ProductVariant.barcode.ilike(f"%{s_clean}%"),
+                    ProductVariant.qr_reference.ilike(f"%{s_clean}%"),
                 )
             )
 
@@ -225,44 +243,84 @@ class ProductVariantRepository(BaseRepository[ProductVariant]):
         return result.scalar_one_or_none()
 
     async def get_by_sku(self, sku: str) -> ProductVariant | None:
+        clean = normalize_scanned_code(sku)
+        if not clean:
+            return None
         result = await self.db.execute(
             select(ProductVariant)
-            .where(ProductVariant.sku == sku)
+            .where(func.lower(ProductVariant.sku) == clean.lower())
             .options(
                 selectinload(ProductVariant.product).selectinload(Product.category),
                 selectinload(ProductVariant.product).selectinload(Product.brand),
                 selectinload(ProductVariant.color),
                 selectinload(ProductVariant.size),
+                selectinload(ProductVariant.inventory_stocks),
             )
         )
         return result.scalar_one_or_none()
 
     async def get_by_barcode(self, barcode: str) -> ProductVariant | None:
+        clean = normalize_scanned_code(barcode)
+        if not clean:
+            return None
         result = await self.db.execute(
             select(ProductVariant)
-            .where(ProductVariant.barcode == barcode)
+            .where(func.lower(ProductVariant.barcode) == clean.lower())
             .options(
                 selectinload(ProductVariant.product).selectinload(Product.category),
                 selectinload(ProductVariant.product).selectinload(Product.brand),
                 selectinload(ProductVariant.color),
                 selectinload(ProductVariant.size),
+                selectinload(ProductVariant.inventory_stocks),
             )
         )
         return result.scalar_one_or_none()
 
     async def get_by_qr_reference(self, qr_reference: str) -> ProductVariant | None:
+        clean = normalize_scanned_code(qr_reference)
+        if not clean:
+            return None
         result = await self.db.execute(
             select(ProductVariant)
-            .where(ProductVariant.qr_reference == qr_reference)
+            .where(func.lower(ProductVariant.qr_reference) == clean.lower())
             .options(
                 selectinload(ProductVariant.product).selectinload(Product.category),
                 selectinload(ProductVariant.product).selectinload(Product.brand),
                 selectinload(ProductVariant.color),
                 selectinload(ProductVariant.size),
+                selectinload(ProductVariant.inventory_stocks),
             )
         )
         return result.scalar_one_or_none()
 
+    async def lookup_by_any_code(self, code: str) -> ProductVariant | None:
+        """
+        Single-roundtrip lookup matching barcode, SKU, or QR reference (case-insensitive)
+        after canonical URL/scanner normalization.
+        """
+        clean = normalize_scanned_code(code)
+        if not clean:
+            return None
+        clean_lower = clean.lower()
+        result = await self.db.execute(
+            select(ProductVariant)
+            .where(
+                or_(
+                    func.lower(ProductVariant.barcode) == clean_lower,
+                    func.lower(ProductVariant.sku) == clean_lower,
+                    func.lower(ProductVariant.qr_reference) == clean_lower,
+                )
+            )
+            .options(
+                selectinload(ProductVariant.product).selectinload(Product.category),
+                selectinload(ProductVariant.product).selectinload(Product.brand),
+                selectinload(ProductVariant.color),
+                selectinload(ProductVariant.size),
+                selectinload(ProductVariant.inventory_stocks),
+            )
+            .limit(1)
+        )
+        return result.scalars().first()
 
     async def search(
         self,
@@ -280,12 +338,14 @@ class ProductVariantRepository(BaseRepository[ProductVariant]):
             selectinload(ProductVariant.size),
         )
         if q:
+            q_clean = normalize_scanned_code(q) or q.strip()
             stmt = stmt.join(ProductVariant.product).where(
                 or_(
-                    ProductVariant.sku.ilike(f"%{q}%"),
-                    ProductVariant.barcode.ilike(f"%{q}%"),
-                    ProductVariant.qr_reference.ilike(f"%{q}%"),
-                    Product.name.ilike(f"%{q}%"),
+                    ProductVariant.sku.ilike(f"%{q_clean}%"),
+                    ProductVariant.barcode.ilike(f"%{q_clean}%"),
+                    ProductVariant.qr_reference.ilike(f"%{q_clean}%"),
+                    Product.name.ilike(f"%{q_clean}%"),
+                    Product.code.ilike(f"%{q_clean}%"),
                 )
             )
         if product_id:
