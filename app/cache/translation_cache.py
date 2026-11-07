@@ -1033,14 +1033,18 @@ class TranslationCacheService:
         """Upsert default translations into base_data.translate and warm cache."""
         inserted = 0
         all_seeds = ADMIN_FRONT_TRANSLATIONS + POS_TRANSLATIONS
+
+        # Single bulk query for all existing translations to eliminate 250+ sequential DB roundtrips
+        stmt = select(TRANSLATE_MODEL).where(TRANSLATE_MODEL.deleted_datetime.is_(None))
+        existing_records = (await db.execute(stmt)).scalars().all()
+        lookup = {
+            (r.schema_name, r.table_name, r.column_name): r
+            for r in existing_records
+        }
+
         for item in all_seeds:
-            stmt = select(TRANSLATE_MODEL).where(
-                TRANSLATE_MODEL.schema_name == item["schema_name"],
-                TRANSLATE_MODEL.table_name == item["table_name"],
-                TRANSLATE_MODEL.column_name == item["column_name"],
-                TRANSLATE_MODEL.deleted_datetime.is_(None),
-            )
-            existing = (await db.execute(stmt)).scalar_one_or_none()
+            key = (item["schema_name"], item["table_name"], item["column_name"])
+            existing = lookup.get(key)
             if existing:
                 existing.en = item["en"]
                 existing.km = item["km"]
@@ -1065,6 +1069,7 @@ class TranslationCacheService:
                     created_by="system_seeder",
                 )
                 db.add(record)
+                lookup[key] = record
                 inserted += 1
 
         await db.commit()
