@@ -22,6 +22,31 @@ class STORE_SETTINGS_SCHEMA(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RECEIPT_TEMPLATE_SCHEMA(BaseModel):
+    paper_width: str = Field(default="80mm", pattern="^(80mm|58mm)$")
+    store_name: str = Field(default="VANNAK CLOTHING BOUTIQUE", max_length=150)
+    store_name_kh: str = Field(default="គឹម វណ្ណាក់ ហាងលក់សម្លៀកបំពាក់", max_length=150)
+    tagline: Optional[str] = Field(default="Premium Streetwear & Contemporary Fashion", max_length=200)
+    phone: Optional[str] = Field(default="+855 23 888 999", max_length=50)
+    address: Optional[str] = Field(default="#123 Preah Norodom Blvd, Daun Penh, Phnom Penh", max_length=255)
+    tax_id: Optional[str] = Field(default="K001-902348572", max_length=50)
+    show_item_sku: bool = True
+    show_variant_attrs: bool = True
+    show_khr_conversion: bool = True
+    show_tax_breakdown: bool = True
+    show_cashier_name: bool = True
+    show_customer_info: bool = True
+    footer_message: Optional[str] = Field(default="THANK YOU FOR SHOPPING WITH US!", max_length=255)
+    return_policy: Optional[str] = Field(
+        default="Exchanges accepted within 7 days with original tag and receipt. Sale items are non-refundable.",
+        max_length=500,
+    )
+    wifi_info: Optional[str] = Field(default="Guest Wi-Fi: Vannak_Store | Pass: fashion2026", max_length=100)
+    qr_content: Optional[str] = Field(default="https://kimvannak.store", max_length=255)
+
+    model_config = {"from_attributes": True}
+
+
 class GENERIC_SETTING_SCHEMA(BaseModel):
     category: str = Field(..., min_length=1, max_length=50)
     key: str = Field(..., min_length=1, max_length=100)
