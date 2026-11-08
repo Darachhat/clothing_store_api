@@ -17,6 +17,7 @@ router = APIRouter(prefix="/branches", tags=["Branches & Warehouses"])
 warehouses_router = APIRouter(prefix="/warehouses", tags=["Branches & Warehouses"])
 
 
+
 class WarehouseCreate(BASE_SCHEMA):
     branch_id: UUID
     name: str
