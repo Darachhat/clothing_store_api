@@ -117,6 +117,7 @@ class TELEGRAM_BOT_MODEL(BASE_MODEL):
     user_id                     : Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     username                    : Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     token                       : Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    login_url                   : Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     description                 : Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status_code                 : Mapped[str]           = mapped_column(String(10), default="active", nullable=False)
 

@@ -14,6 +14,7 @@ class TELEGRAM_BOT_CREATE_SCHEMA(BaseModel):
     user_id     : Optional[str] = Field(default=None, max_length=100)
     username    : Optional[str] = Field(default=None, max_length=100)
     token       : Optional[str] = Field(default=None)
+    login_url   : Optional[str] = Field(default=None, max_length=500, examples=["https://admin.example.com/login"])
     description : Optional[str] = Field(default=None)
     status_code : str           = Field(default="active", max_length=10)
 
@@ -24,6 +25,7 @@ class TELEGRAM_BOT_UPDATE_SCHEMA(BaseModel):
     user_id     : Optional[str] = Field(default=None, max_length=100)
     username    : Optional[str] = Field(default=None, max_length=100)
     token       : Optional[str] = Field(default=None)
+    login_url   : Optional[str] = Field(default=None, max_length=500)
     description : Optional[str] = Field(default=None)
     status_code : Optional[str] = Field(default=None, max_length=10)
 
@@ -35,6 +37,7 @@ class TELEGRAM_BOT_RESPONSE_SCHEMA(BaseModel):
     user_id          : Optional[str]      = None
     username         : Optional[str]      = None
     token            : Optional[str]      = None
+    login_url        : Optional[str]      = None
     description      : Optional[str]      = None
     status_code      : str
     created_datetime : Optional[datetime] = None

@@ -22,7 +22,13 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    if not plain or not hashed:
+        return False
+    try:
+        return pwd_context.verify(plain, hashed)
+    except (ValueError, TypeError):
+        # Unrecognised/placeholder hashes (e.g. "!telegram_only") must fail as a normal bad login, not a 500.
+        return False
 
 
 # ── JWT ───────────────────────────────────────────────────────────────────────

@@ -43,6 +43,7 @@ class TELEGRAM_BOT_SERVICE:
             , user_id          = row.user_id
             , username         = row.username
             , token            = row.token
+            , login_url        = row.login_url
             , description      = row.description
             , status_code      = row.status_code or "active"
             , created_datetime = row.created_datetime
@@ -144,6 +145,7 @@ class TELEGRAM_BOT_SERVICE:
             , user_id     = data.user_id
             , username    = data.username
             , token       = data.token
+            , login_url   = data.login_url
             , description = data.description
             , status_code = data.status_code
             , created_by  = "admin"

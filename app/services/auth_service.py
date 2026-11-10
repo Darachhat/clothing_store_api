@@ -538,6 +538,31 @@ class AUTH_SERVICE:
             "expires_in_seconds" : expires_in,
         }
 
+    async def _resolve_telegram_login_url(self) -> Optional[str]:
+        """Portal login URL stored on the active auth.telegram_bot row (None when not set)."""
+        stmt = (
+            select(TELEGRAM_BOT_MODEL.login_url)
+            .where(
+                TELEGRAM_BOT_MODEL.deleted_datetime.is_(None),
+                TELEGRAM_BOT_MODEL.status_code.in_(["active", "ACTIVE"]),
+            )
+            .order_by(TELEGRAM_BOT_MODEL.created_datetime.desc())
+            .limit(1)
+        )
+        value = (await self.db.execute(stmt)).scalar_one_or_none()
+        return value.strip() if value and value.strip() else None
+
+    @staticmethod
+    def _telegram_login_markup(text: str, login_url: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Inline login button; None when the bot has no login_url configured."""
+        if not login_url:
+            return None
+        return {
+            "inline_keyboard": [[
+                {"text": text, "login_url": {"url": login_url, "request_write_access": True}}
+            ]],
+        }
+
     @staticmethod
     async def _send_telegram_bot_message(
         token        : str,
@@ -567,6 +592,8 @@ class AUTH_SERVICE:
         global _LAST_TELEGRAM_UPDATE_OFFSET
         import httpx
         import uuid as _uuid
+
+        login_url = await self._resolve_telegram_login_url()
 
         url = f"https://api.telegram.org/bot{token}/getUpdates"
         params: Dict[str, Any] = {
@@ -642,17 +669,7 @@ class AUTH_SERVICE:
                             token,
                             chat_id,
                             f"✅ Login confirmed for @{existing_user.username} ({existing_user.full_name})!\n\nYou can return to your browser or tap below for Seamless Telegram Login:",
-                            reply_markup={
-                                "inline_keyboard": [[
-                                    {
-                                        "text": "🔐 Seamless Login to Admin Portal",
-                                        "login_url": {
-                                            "url": "https://admin.kimvannak.store/login",
-                                            "request_write_access": True,
-                                        },
-                                    }
-                                ]],
-                            },
+                            reply_markup=self._telegram_login_markup("🔐 Seamless Login to Admin Portal", login_url),
                         )
                     else:
                         c_row.telegram_id = f"CHAT:{tg_id}"
@@ -722,17 +739,7 @@ class AUTH_SERVICE:
                     token,
                     chat_id,
                     "👋 Welcome to Clothing Store Bot!\n\nTap the button below to log in seamlessly with your Telegram account:",
-                    reply_markup={
-                        "inline_keyboard": [[
-                            {
-                                "text": "🔐 Log in to Admin Portal",
-                                "login_url": {
-                                    "url": "https://admin.kimvannak.store/login",
-                                    "request_write_access": True,
-                                },
-                            }
-                        ]],
-                    },
+                    reply_markup=self._telegram_login_markup("🔐 Log in to Admin Portal", login_url),
                 )
 
             # 2. Handle shared contact (request_contact=True) to verify phone & link account
