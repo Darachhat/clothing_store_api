@@ -1,4 +1,4 @@
-"""Comprehensive tests for Telegram Login Authentication, Phone Number Linking/Normalization, Admin Role Management, and Lane Authorization."""
+"""Comprehensive tests for Telegram Login Authentication, Phone Number Linking/Normalization, Admin ROLE_MODEL Management, and Lane Authorization."""
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.security import hash_password
 from app.core.utils.phone_utils import get_equivalent_phone_formats, normalize_phone_number
 from app.core.utils.telegram_auth import compute_telegram_login_hash
-from app.models import Branch, Permission, Role, User, Warehouse
+from app.models import Branch, PERMISSION_MODEL, ROLE_MODEL, User, Warehouse
 from app.services.auth_service import AUTH_SERVICE
 
 TEST_BOT_TOKEN = "123456789:AAH_test_bot_secret_token_for_hmac_verification"
@@ -63,38 +63,38 @@ async def seed_roles_and_users(db: AsyncSession) -> dict[str, Any]:
         ("settings.manage", "Manage Settings", "settings"),
         ("report.view", "View Reports", "report"),
     ]
-    perms: dict[str, Permission] = {}
+    perms: dict[str, PERMISSION_MODEL] = {}
     for code, name, module in perm_defs:
-        p = Permission(code=code, name=name, module=module)
+        p = PERMISSION_MODEL(code=code, name=name, module=module)
         db.add(p)
         perms[code] = p
     await db.flush()
 
-    admin_role = Role(
+    admin_role = ROLE_MODEL(
         name="ADMIN",
         description="System Administrator",
         is_system=True,
         permissions=list(perms.values()),
     )
-    manager_role = Role(
+    manager_role = ROLE_MODEL(
         name="MANAGER",
         description="Store Manager",
         is_system=True,
         permissions=[perms["product.read"], perms["inventory.read"], perms["sale.read"], perms["report.view"]],
     )
-    warehouse_role = Role(
+    warehouse_role = ROLE_MODEL(
         name="WAREHOUSE",
         description="Stock Manager",
         is_system=True,
         permissions=[perms["product.read"], perms["inventory.read"], perms["inventory.adjust"]],
     )
-    cashier_role = Role(
+    cashier_role = ROLE_MODEL(
         name="CASHIER",
         description="POS Cashier",
         is_system=True,
         permissions=[perms["product.read"], perms["inventory.read"], perms["sale.read"], perms["sale.create"]],
     )
-    customer_role = Role(
+    customer_role = ROLE_MODEL(
         name="CUSTOMER",
         description="Storefront Customer",
         is_system=True,
@@ -511,7 +511,7 @@ async def test_phone_verification_flow_and_conflicts(client: AsyncClient, db: As
     assert [r["name"] for r in verified_user["roles"]] == ["MANAGER"]
 
 
-# ── 4. Admin Role Management & Security Tests ─────────────────────────────────
+# ── 4. Admin ROLE_MODEL Management & Security Tests ─────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_role_assignment_multi_role_revocation_and_history(client: AsyncClient, db: AsyncSession) -> None:

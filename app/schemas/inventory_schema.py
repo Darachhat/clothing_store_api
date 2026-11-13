@@ -87,6 +87,48 @@ class STOCK_ADJUSTMENT_CREATE_SCHEMA(BaseModel):
         return out
 
 
+class REORDER_LEVEL_UPDATE_SCHEMA(BaseModel):
+    variant_id    : uuid.UUID
+    warehouse_id  : uuid.UUID
+    reorder_level : int       = Field(ge=0, le=1_000_000)
+
+
+class STOCK_MATRIX_OPTION_SCHEMA(BaseModel):
+    id         : Optional[uuid.UUID] = None   # None = variant without this attribute ("Default")
+    name       : str
+    hex_code   : Optional[str]       = None
+
+
+class STOCK_MATRIX_CELL_SCHEMA(BaseModel):
+    variant_id    : uuid.UUID
+    sku           : str
+    barcode       : Optional[str]        = None
+    color_id      : Optional[uuid.UUID]  = None
+    size_id       : Optional[uuid.UUID]  = None
+    status_code   : str                  = "ACTIVE"
+    quantity      : int                  = 0
+    reorder_level : int                  = 0
+    stock_status  : str                  = "OUT"            # OUT | LOW | IN
+    by_warehouse  : dict[str, int]       = Field(default_factory=dict)
+
+
+class STOCK_MATRIX_WAREHOUSE_SCHEMA(BaseModel):
+    id   : uuid.UUID
+    name : str
+
+
+class STOCK_MATRIX_RESPONSE_SCHEMA(BaseModel):
+    """Stock of one product laid out by color (rows) and size (columns)."""
+    product_id      : uuid.UUID
+    colors          : List[STOCK_MATRIX_OPTION_SCHEMA]
+    sizes           : List[STOCK_MATRIX_OPTION_SCHEMA]
+    warehouses      : List[STOCK_MATRIX_WAREHOUSE_SCHEMA]
+    cells           : List[STOCK_MATRIX_CELL_SCHEMA]
+    total_quantity  : int = 0
+    low_count       : int = 0
+    out_count       : int = 0
+
+
 class STOCK_TRANSFER_ITEM_CREATE_SCHEMA(BaseModel):
     variant_id : uuid.UUID
     quantity   : int       = Field(gt=0)
@@ -135,6 +177,11 @@ __all__ = [
     "INVENTORY_STOCK_RESPONSE_SCHEMA",
     "INVENTORY_MOVEMENT_RESPONSE_SCHEMA",
     "STOCK_ADJUSTMENT_CREATE_SCHEMA",
+    "REORDER_LEVEL_UPDATE_SCHEMA",
+    "STOCK_MATRIX_OPTION_SCHEMA",
+    "STOCK_MATRIX_CELL_SCHEMA",
+    "STOCK_MATRIX_WAREHOUSE_SCHEMA",
+    "STOCK_MATRIX_RESPONSE_SCHEMA",
     "STOCK_ADJUSTMENT_REQUEST_SCHEMA",
     "STOCK_ADJUSTMENT_RESPONSE_SCHEMA",
     "STOCK_TRANSFER_ITEM_CREATE_SCHEMA",

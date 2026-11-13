@@ -70,7 +70,7 @@ def require_permission(permission_code: str):
         if permission_code not in user_permissions:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied: requires '{permission_code}'",
+                detail=f"PERMISSION_MODEL denied: requires '{permission_code}'",
             )
         return current_user
 

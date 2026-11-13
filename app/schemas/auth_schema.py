@@ -247,7 +247,7 @@ class SYSTEM_ENDPOINT_LIST_OUT_SCHEMA(BaseModel):
     stats : STATS_SUMMARY_SCHEMA
 
 
-# ── User & Role Authentication Schemas ────────────────────────────────────────
+# ── User & ROLE_MODEL Authentication Schemas ────────────────────────────────────────
 
 class LOGIN_REQUEST_SCHEMA(BaseModel):
     username : str

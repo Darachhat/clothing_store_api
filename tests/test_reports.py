@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import hash_password
 from app.models import Branch, Warehouse
 from app.models import Expense, ExpenseCategory
-from app.models import Brand, Category, Color, Product, ProductVariant, Size
-from app.models import Permission, Role, User
+from app.models import BRAND_MODEL, CATEGORY_MODEL, Color, Product, ProductVariant, Size
+from app.models import PERMISSION_MODEL, ROLE_MODEL, User
 from app.services.inventory_service import INVENTORY_SERVICE
 from app.services.sale_service import SALE_SERVICE
 
@@ -27,9 +27,9 @@ async def create_report_test_infra(db: AsyncSession):
     db.add(warehouse)
     await db.flush()
 
-    category = Category(name="Report Category", slug="report-category")
+    category = CATEGORY_MODEL(name="Report CATEGORY_MODEL", slug="report-category")
     db.add(category)
-    brand = Brand(name="ReportBrand", slug="reportbrand")
+    brand = BRAND_MODEL(name="ReportBrand", slug="reportbrand")
     db.add(brand)
     color = Color(name="ReportBlue", hex_code="#0000AA")
     db.add(color)
@@ -60,14 +60,14 @@ async def create_report_test_infra(db: AsyncSession):
 
     # Permissions - flush first, then assign in constructor to avoid lazy load in async
     perms = [
-        Permission(code="report.read", name="Read Reports", module="reports"),
-        Permission(code="sale.create", name="Create Sale", module="sales"),
-        Permission(code="sale.read", name="Read Sale", module="sales"),
+        PERMISSION_MODEL(code="report.read", name="Read Reports", module="reports"),
+        PERMISSION_MODEL(code="sale.create", name="Create Sale", module="sales"),
+        PERMISSION_MODEL(code="sale.read", name="Read Sale", module="sales"),
     ]
     db.add_all(perms)
     await db.flush()
 
-    role = Role(name="REPORT_ADMIN_TEST", is_system=True, permissions=perms)
+    role = ROLE_MODEL(name="REPORT_ADMIN_TEST", is_system=True, permissions=perms)
     db.add(role)
     await db.flush()
 
@@ -364,13 +364,13 @@ async def _make_user_with_perms(db: AsyncSession, infra: dict, username: str, co
     from sqlalchemy import select
 
     existing = (
-        await db.execute(select(Permission).where(Permission.code.in_(codes)))
+        await db.execute(select(PERMISSION_MODEL).where(PERMISSION_MODEL.code.in_(codes)))
     ).scalars().all()
     have = {p.code for p in existing}
-    new = [Permission(code=c, name=c, module=c.split(".")[0]) for c in codes if c not in have]
+    new = [PERMISSION_MODEL(code=c, name=c, module=c.split(".")[0]) for c in codes if c not in have]
     db.add_all(new)
     await db.flush()
-    role = Role(name=f"ROLE_{username}", permissions=[*existing, *new])
+    role = ROLE_MODEL(name=f"ROLE_{username}", permissions=[*existing, *new])
     db.add(role)
     await db.flush()
     user = User(

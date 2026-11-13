@@ -7,8 +7,8 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, hash_password
-from app.models import Branch, Permission, PosTerminal, Role, User, Warehouse
-from app.models import Category, Brand, Color, Size, Product, ProductVariant
+from app.models import Branch, PERMISSION_MODEL, PosTerminal, ROLE_MODEL, User, Warehouse
+from app.models import CATEGORY_MODEL, BRAND_MODEL, Color, Size, Product, ProductVariant
 from app.services.inventory_service import INVENTORY_SERVICE
 
 
@@ -41,12 +41,12 @@ async def setup_shift_test_env(db: AsyncSession):
     await db.flush()
 
     # Permissions for sales & shifts
-    sale_perm = Permission(code="sale.create", name="Create Sale", module="sales")
-    sale_read_perm = Permission(code="sale.read", name="Read Sale", module="sales")
+    sale_perm = PERMISSION_MODEL(code="sale.create", name="Create Sale", module="sales")
+    sale_read_perm = PERMISSION_MODEL(code="sale.read", name="Read Sale", module="sales")
     db.add_all([sale_perm, sale_read_perm])
     await db.flush()
 
-    role = Role(
+    role = ROLE_MODEL(
         name="CASHIER",
         is_system=True,
         permissions=[sale_perm, sale_read_perm],
@@ -67,8 +67,8 @@ async def setup_shift_test_env(db: AsyncSession):
     await db.flush()
 
     # Product & stock for test sales
-    category = Category(name="Shirts", slug="shirts-shift")
-    brand = Brand(name="ShiftBrand", slug="shiftbrand")
+    category = CATEGORY_MODEL(name="Shirts", slug="shirts-shift")
+    brand = BRAND_MODEL(name="ShiftBrand", slug="shiftbrand")
     color = Color(name="Black", hex_code="#000000")
     size = Size(name="M", type="LETTER")
     db.add_all([category, brand, color, size])

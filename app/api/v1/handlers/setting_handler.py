@@ -19,7 +19,7 @@ from app.schemas.setting_schema import (
 )
 
 router = APIRouter(prefix="/settings", tags=["Store Settings"])
-public_brand_router = APIRouter(tags=["Brand & Identity"])
+public_brand_router = APIRouter(tags=["BRAND_MODEL & Identity"])
 
 DEFAULT_STICKER_CONFIG: Dict[str, Any] = {
     "paper_size": "THERMAL_50x30",
@@ -79,7 +79,7 @@ DEFAULT_RECEIPT_CONFIG: Dict[str, Any] = {
 
 
 async def resolve_brand_settings(db: AsyncSession) -> dict:
-    """Resolve layered brand settings: Defaults -> Store Info -> Receipt Template -> Brand Profile."""
+    """Resolve layered brand settings: Defaults -> Store Info -> Receipt Template -> BRAND_MODEL Profile."""
     stmt_brand = select(SystemSetting).where(
         SystemSetting.category == "brand",
         SystemSetting.key == "profile",
@@ -257,7 +257,7 @@ async def update_brand_settings(
 
 @router.post("/brand/upload-logo")
 async def upload_brand_logo(
-    file: UploadFile = File(..., description="Brand logo image file (PNG, SVG, WEBP, JPG)"),
+    file: UploadFile = File(..., description="BRAND_MODEL logo image file (PNG, SVG, WEBP, JPG)"),
     asset_type: str = Form("logo", description="Asset type: logo | logo_dark | favicon"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("user.manage")),
@@ -306,7 +306,7 @@ async def get_receipt_settings(
         if isinstance(r.value, dict):
             receipt_val.update(r.value)
 
-    # 3. Layered resolution: Canonical Backend Defaults -> Store Info -> Brand Profile -> Custom Receipt Template
+    # 3. Layered resolution: Canonical Backend Defaults -> Store Info -> BRAND_MODEL Profile -> Custom Receipt Template
     merged = dict(DEFAULT_RECEIPT_CONFIG)
 
     # Layer brand profile
@@ -382,7 +382,7 @@ async def update_receipt_settings(
 
 
 async def resolve_sticker_settings(db: AsyncSession) -> dict:
-    """Resolve layered sticker/label template settings: Defaults -> Brand Profile -> Saved Sticker Template."""
+    """Resolve layered sticker/label template settings: Defaults -> BRAND_MODEL Profile -> Saved Sticker Template."""
     brand_cfg = await resolve_brand_settings(db)
     merged = dict(DEFAULT_STICKER_CONFIG)
     brand_header = (

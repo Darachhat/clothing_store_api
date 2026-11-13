@@ -5,23 +5,44 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from slugify import slugify
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.cache.product_cache import ProductCache
 from app.core.enum.common_enum import INVENTORY_MOVEMENT_TYPE_ENUM
-from app.core.exceptions import NOT_FOUND_EXCEPTION
+from app.core.exceptions import CONFLICT_EXCEPTION, NOT_FOUND_EXCEPTION
 from app.core.logging import get_logger
-from app.models import CatalogVersion, Color, Product, ProductVariant, Size, Warehouse
+from app.models import (
+    CatalogVersion,
+    Color,
+    InventoryMovement,
+    InventoryStock,
+    Product,
+    ProductAttribute,
+    ProductAttributeAssignment,
+    ProductAttributeValue,
+    ProductImage,
+    ProductVariant,
+    Size,
+    Warehouse,
+)
 from app.repositories.inventory_repository import InventoryStockRepository
 from app.repositories.product_repository import ProductRepository, ProductVariantRepository
 from app.schemas.product_schema import (
-    PRODUCT_CREATE_SCHEMA
-    , PRODUCT_UPDATE_SCHEMA
-    , PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA
-    , PRODUCT_VARIANT_CREATE_SCHEMA
-    , PRODUCT_VARIANT_UPDATE_SCHEMA
-    , VARIANT_SCAN_RESPONSE_SCHEMA
+    PRODUCT_ATTRIBUTE_CREATE_SCHEMA,
+    PRODUCT_ATTRIBUTE_UPDATE_SCHEMA,
+    PRODUCT_ATTRIBUTE_VALUE_CREATE_SCHEMA,
+    PRODUCT_CREATE_SCHEMA,
+    PRODUCT_IMAGE_CREATE_SCHEMA,
+    PRODUCT_IMAGE_UPDATE_SCHEMA,
+    PRODUCT_UPDATE_SCHEMA,
+    PRODUCT_VARIANT_BULK_CREATE_SCHEMA,
+    PRODUCT_VARIANT_BULK_UPDATE_SCHEMA,
+    PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA,
+    PRODUCT_VARIANT_CREATE_SCHEMA,
+    PRODUCT_VARIANT_UPDATE_SCHEMA,
+    VARIANT_SCAN_RESPONSE_SCHEMA,
 )
 from app.utils.codes import generate_compact_barcode, normalize_scanned_code
 from app.utils.generators import generate_qr_reference, generate_sku
@@ -185,6 +206,64 @@ class PRODUCT_SERVICE:
         await cls.increment_inventory_version(db)
 
     @classmethod
+    async def _find_existing_variant_by_code(
+        cls,
+        db: AsyncSession,
+        code: str,
+        exclude_variant_id: Optional[UUID] = None,
+    ) -> Optional[ProductVariant]:
+        """Find any variant whose barcode, QR reference, or SKU matches ``code`` (case-insensitive)."""
+        clean = (normalize_scanned_code(code) or code).strip()
+        if not clean:
+            return None
+        clean_lower = clean.lower()
+        stmt = (
+            select(ProductVariant)
+            .options(selectinload(ProductVariant.product))
+            .where(
+                or_(
+                    func.lower(ProductVariant.barcode) == clean_lower,
+                    func.lower(ProductVariant.qr_reference) == clean_lower,
+                    func.lower(ProductVariant.sku) == clean_lower,
+                )
+            )
+        )
+        if exclude_variant_id is not None:
+            stmt = stmt.where(ProductVariant.id != exclude_variant_id)
+        res = await db.execute(stmt.limit(1))
+        return res.scalars().first()
+
+    @classmethod
+    async def _find_existing_color_size_variant(
+        cls,
+        db: AsyncSession,
+        product_id: UUID,
+        color_id: Optional[UUID],
+        size_id: Optional[UUID],
+        exclude_variant_id: Optional[UUID] = None,
+    ) -> Optional[ProductVariant]:
+        """Check whether a (product_id, color_id, size_id) combination already exists."""
+        stmt = select(ProductVariant).where(
+            ProductVariant.product_id == product_id,
+            ProductVariant.color_id.is_(None) if color_id is None else ProductVariant.color_id == color_id,
+            ProductVariant.size_id.is_(None) if size_id is None else ProductVariant.size_id == size_id,
+        )
+        if exclude_variant_id is not None:
+            stmt = stmt.where(ProductVariant.id != exclude_variant_id)
+        res = await db.execute(stmt.limit(1))
+        return res.scalars().first()
+
+    @classmethod
+    async def _generate_unique_qr_reference(cls, db: AsyncSession) -> str:
+        """Generate a QR reference guaranteed not to collide with existing QR references or barcodes."""
+        for _ in range(50):
+            candidate = await generate_qr_reference(db)
+            conflict = await cls._find_existing_variant_by_code(db, candidate)
+            if conflict is None:
+                return candidate
+        raise CONFLICT_EXCEPTION("Unable to allocate a unique QR reference")
+
+    @classmethod
     async def _create_variant_internal(
         cls,
         db: AsyncSession,
@@ -192,6 +271,14 @@ class PRODUCT_SERVICE:
         body: PRODUCT_VARIANT_CREATE_SCHEMA | PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA,
     ) -> ProductVariant:
         repo = ProductVariantRepository(db)
+
+        dup_combo = await cls._find_existing_color_size_variant(
+            db, product.id, body.color_id, body.size_id
+        )
+        if dup_combo is not None:
+            raise CONFLICT_EXCEPTION(
+                f"A variant with this color and size already exists for this product ({dup_combo.sku})"
+            )
 
         color_name = None
         size_name = None
@@ -211,33 +298,49 @@ class PRODUCT_SERVICE:
         )
         count = count_res.scalar_one()
         seq_num = count + 1
-        while True:
-            sku = generate_sku(product.code, color_name, size_name, seq_num)
-            existing_sku = await db.execute(
-                select(ProductVariant.id).where(ProductVariant.sku == sku)
-            )
-            if existing_sku.scalar_one_or_none() is None:
-                break
-            seq_num += 1
 
-        qr_reference = await generate_qr_reference(db)
+        raw_manual_sku = (getattr(body, "sku", None) or "").strip().upper()
+        if raw_manual_sku:
+            sku_conflict = await cls._find_existing_variant_by_code(db, raw_manual_sku)
+            if sku_conflict is not None:
+                raise CONFLICT_EXCEPTION(f"SKU '{raw_manual_sku}' is already in use ({sku_conflict.sku})")
+            sku = raw_manual_sku
+        else:
+            base_sku = generate_sku(product.code, color_name, size_name, seq_num)
+            candidate_sku = base_sku
+            attempt = 1
+            while True:
+                existing_sku = await db.execute(
+                    select(ProductVariant.id).where(func.lower(ProductVariant.sku) == candidate_sku.lower())
+                )
+                if existing_sku.scalar_one_or_none() is None:
+                    sku = candidate_sku
+                    break
+                attempt += 1
+                candidate_sku = f"{base_sku}-{attempt:02d}"
+
+        qr_reference = await cls._generate_unique_qr_reference(db)
 
         raw_barcode = (body.barcode or "").strip()
         if raw_barcode:
             resolved_barcode = normalize_scanned_code(raw_barcode) or raw_barcode
+            conflict = await cls._find_existing_variant_by_code(db, resolved_barcode)
+            if conflict is not None:
+                conflict_prod = conflict.product.name if getattr(conflict, "product", None) else "another product"
+                raise CONFLICT_EXCEPTION(
+                    f"Barcode or QR code '{resolved_barcode}' is already assigned to {conflict_prod} ({conflict.sku})"
+                )
         else:
             b_seq = seq_num
             while True:
                 candidate = generate_compact_barcode(product.code, b_seq)
-                existing_bc = await db.execute(
-                    select(ProductVariant.id).where(ProductVariant.barcode == candidate)
-                )
-                if existing_bc.scalar_one_or_none() is None:
+                conflict = await cls._find_existing_variant_by_code(db, candidate)
+                if conflict is None:
                     resolved_barcode = candidate
                     break
                 b_seq += 1
 
-        dump_data = body.model_dump(exclude={"initial_stock", "warehouse_id", "product_id", "barcode"})
+        dump_data = body.model_dump(exclude={"initial_stock", "warehouse_id", "product_id", "barcode", "sku"})
         variant = await repo.create(
             product_id=product.id,
             sku=sku,
@@ -257,10 +360,88 @@ class PRODUCT_SERVICE:
         return variant
 
     @classmethod
+    async def _sync_product_images(
+        cls,
+        db: AsyncSession,
+        product: Product,
+        images_input: List[PRODUCT_IMAGE_CREATE_SCHEMA],
+    ) -> None:
+        existing_imgs = list(
+            (await db.execute(select(ProductImage).where(ProductImage.product_id == product.id))).scalars().all()
+        )
+        for img in existing_imgs:
+            await db.delete(img)
+        await db.flush()
+
+        primary_url: Optional[str] = None
+        for idx, item in enumerate(images_input):
+            url = (item.image_url or "").strip()
+            if not url:
+                continue
+            is_prim = bool(item.is_primary) or (idx == 0 and not any(i.is_primary for i in images_input))
+            if is_prim and not primary_url:
+                primary_url = url
+            db.add(
+                ProductImage(
+                    product_id=product.id,
+                    variant_id=item.variant_id,
+                    image_url=url,
+                    is_primary=is_prim,
+                    sort_order=item.sort_order if item.sort_order else idx,
+                    status_code="ACTIVE",
+                )
+            )
+        if primary_url:
+            product.image_url = primary_url
+        elif not images_input:
+            product.image_url = None
+        await db.flush()
+
+    @classmethod
+    async def _sync_product_attributes(
+        cls,
+        db: AsyncSession,
+        product_id: UUID,
+        attribute_value_ids: List[UUID],
+    ) -> None:
+        existing_assigns = list(
+            (await db.execute(
+                select(ProductAttributeAssignment).where(ProductAttributeAssignment.product_id == product_id)
+            )).scalars().all()
+        )
+        for assign in existing_assigns:
+            await db.delete(assign)
+        await db.flush()
+
+        if not attribute_value_ids:
+            return
+
+        vals = list(
+            (await db.execute(
+                select(ProductAttributeValue).where(ProductAttributeValue.id.in_(attribute_value_ids))
+            )).scalars().all()
+        )
+        seen_pairs: set[Tuple[UUID, UUID]] = set()
+        for v in vals:
+            pair = (v.attribute_id, v.id)
+            if pair in seen_pairs:
+                continue
+            seen_pairs.add(pair)
+            db.add(
+                ProductAttributeAssignment(
+                    product_id=product_id,
+                    attribute_id=v.attribute_id,
+                    attribute_value_id=v.id,
+                    status_code="ACTIVE",
+                )
+            )
+        await db.flush()
+
+    @classmethod
     async def create_product(cls, db: AsyncSession, body: PRODUCT_CREATE_SCHEMA) -> Product:
         repo = ProductRepository(db)
 
-        slug      = slugify(body.name)
+        slug      = slugify(body.name) or "product"
         base_slug = slug
         counter   = 1
         while True:
@@ -272,24 +453,54 @@ class PRODUCT_SERVICE:
             slug     = f"{base_slug}-{counter}"
             counter += 1
 
-        count_result = await db.execute(select(func.count()).select_from(Product))
-        count        = count_result.scalar_one()
-        seq_num      = count + 1
-        while True:
-            code = f"PROD-{seq_num:05d}"
+        raw_code = (body.code or "").strip().upper()
+        if raw_code:
             existing_code = await db.execute(
-                select(Product.id).where(Product.code == code)
+                select(Product.id).where(func.lower(Product.code) == raw_code.lower())
             )
-            if existing_code.scalar_one_or_none() is None:
-                break
-            seq_num += 1
+            if existing_code.scalar_one_or_none() is not None:
+                raise CONFLICT_EXCEPTION(f"Product code '{raw_code}' already exists")
+            code = raw_code
+        else:
+            count_result = await db.execute(select(func.count()).select_from(Product))
+            count        = count_result.scalar_one()
+            seq_num      = count + 1
+            while True:
+                code = f"PROD-{seq_num:05d}"
+                existing_code = await db.execute(
+                    select(Product.id).where(func.lower(Product.code) == code.lower())
+                )
+                if existing_code.scalar_one_or_none() is None:
+                    break
+                seq_num += 1
 
-        product_payload = body.model_dump(exclude={"initial_variant", "variants"})
-        product = await repo.create(
-            code   = code
-            , slug = slug
-            , **product_payload
+        clean_tags = [t.strip() for t in (body.tags or []) if t and t.strip()]
+        product_payload = body.model_dump(
+            exclude={"code", "tags", "images", "attribute_value_ids", "initial_variant", "variants"}
         )
+        product = await repo.create(
+            code   = code,
+            slug   = slug,
+            tags   = clean_tags,
+            **product_payload,
+        )
+
+        if body.images is not None:
+            await cls._sync_product_images(db, product, body.images)
+        elif product.image_url:
+            db.add(
+                ProductImage(
+                    product_id=product.id,
+                    image_url=product.image_url,
+                    is_primary=True,
+                    sort_order=0,
+                    status_code="ACTIVE",
+                )
+            )
+            await db.flush()
+
+        if body.attribute_value_ids is not None:
+            await cls._sync_product_attributes(db, product.id, body.attribute_value_ids)
 
         # Create initial variant(s) if provided on product creation
         variants_to_create: List[PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA] = []
@@ -330,7 +541,42 @@ class PRODUCT_SERVICE:
             raise NOT_FOUND_EXCEPTION("Product not found")
         old_name = product.name
         old_status = product.status
-        product = await repo.update(product, **body.model_dump(exclude_none=True))
+
+        update_fields = body.model_dump(
+            exclude_unset=True,
+            exclude={"images", "attribute_value_ids"},
+        )
+        if "code" in update_fields:
+            new_code = (update_fields["code"] or "").strip().upper()
+            if new_code and new_code.lower() != product.code.lower():
+                dup = await db.execute(
+                    select(Product.id).where(
+                        func.lower(Product.code) == new_code.lower(),
+                        Product.id != product.id,
+                    )
+                )
+                if dup.scalar_one_or_none() is not None:
+                    raise CONFLICT_EXCEPTION(f"Product code '{new_code}' already exists")
+                update_fields["code"] = new_code
+            else:
+                update_fields.pop("code", None)
+
+        if "tags" in update_fields and update_fields["tags"] is not None:
+            update_fields["tags"] = [t.strip() for t in update_fields["tags"] if t and t.strip()]
+
+        # Remove None for non-nullable fields
+        for non_null in ("name", "status_code", "tags"):
+            if non_null in update_fields and update_fields[non_null] is None:
+                update_fields.pop(non_null, None)
+
+        if update_fields:
+            product = await repo.update(product, **update_fields)
+
+        if body.images is not None:
+            await cls._sync_product_images(db, product, body.images)
+        if body.attribute_value_ids is not None:
+            await cls._sync_product_attributes(db, product.id, body.attribute_value_ids)
+
         from app.services.audit_service import AUDIT_SERVICE
         await AUDIT_SERVICE.record(
             db,
@@ -347,6 +593,7 @@ class PRODUCT_SERVICE:
 
     @classmethod
     async def delete_product(cls, db: AsyncSession, product_id: UUID) -> None:
+        """Archive product (set status_code='DISCONTINUED') to preserve dependent variants/sales/stock."""
         repo    = ProductRepository(db)
         product = await repo.get_by_id(product_id)
         if not product:
@@ -354,14 +601,29 @@ class PRODUCT_SERVICE:
         from app.services.audit_service import AUDIT_SERVICE
         await AUDIT_SERVICE.record(
             db,
-            action="PRODUCT_DELETED",
+            action="PRODUCT_ARCHIVED",
             entity_type="product",
             entity_id=product.id,
-            old_data={"code": product.code, "name": product.name},
+            old_data={"code": product.code, "name": product.name, "status": product.status_code},
+            new_data={"status": "DISCONTINUED"},
         )
-        await repo.delete(product)
+        await repo.update(product, status_code="DISCONTINUED")
         await cls.increment_catalog_version(db)
         await db.commit()
+
+    @classmethod
+    async def bulk_archive_products(cls, db: AsyncSession, product_ids: List[UUID]) -> int:
+        if not product_ids:
+            return 0
+        stmt = (
+            update(Product)
+            .where(Product.id.in_(product_ids))
+            .values(status_code="DISCONTINUED", updated_datetime=func.now())
+        )
+        res = await db.execute(stmt)
+        await cls.increment_catalog_version(db)
+        await db.commit()
+        return int(res.rowcount or 0)
 
     @classmethod
     async def list_variants(
@@ -400,14 +662,254 @@ class PRODUCT_SERVICE:
         return created or variant
 
     @classmethod
-    async def delete_variant(cls, db: AsyncSession, variant_id: UUID) -> None:
+    async def create_variants_bulk(
+        cls,
+        db: AsyncSession,
+        product_id: UUID,
+        body: PRODUCT_VARIANT_BULK_CREATE_SCHEMA,
+    ) -> Dict[str, Any]:
+        """Create many color x size variants (with opening stock) atomically.
+
+        Existing combinations (including duplicates within the request) are skipped and reported.
+        """
+        product_repo = ProductRepository(db)
+        product = await product_repo.get_by_id(product_id)
+        if not product:
+            raise NOT_FOUND_EXCEPTION("Product not found")
+
+        existing = {
+            (c, s)
+            for c, s in (await db.execute(
+                select(ProductVariant.color_id, ProductVariant.size_id)
+                .where(ProductVariant.product_id == product_id)
+            )).all()
+        }
+
+        created: List[ProductVariant] = []
+        skipped: List[Dict[str, Any]] = []
+        seen_barcodes: set[str] = set()
+        seen_skus: set[str] = set()
+        stock_repo = InventoryStockRepository(db)
+
+        for item in body.items:
+            key = (item.color_id, item.size_id)
+            if key in existing:
+                skipped.append({"color_id": item.color_id, "size_id": item.size_id, "reason": "Variant already exists"})
+                continue
+
+            selling = item.selling_price if item.selling_price is not None else body.default_selling_price
+            if selling is None:
+                skipped.append({"color_id": item.color_id, "size_id": item.size_id, "reason": "No selling price provided"})
+                continue
+
+            raw_sku = (item.sku or "").strip().upper() or None
+            if raw_sku:
+                if raw_sku.lower() in seen_skus:
+                    skipped.append({
+                        "color_id": item.color_id,
+                        "size_id": item.size_id,
+                        "reason": f"Duplicate SKU '{raw_sku}' in bulk request",
+                    })
+                    continue
+                sku_conflict = await cls._find_existing_variant_by_code(db, raw_sku)
+                if sku_conflict is not None:
+                    skipped.append({
+                        "color_id": item.color_id,
+                        "size_id": item.size_id,
+                        "reason": f"SKU '{raw_sku}' is already assigned to {sku_conflict.sku}",
+                    })
+                    continue
+
+            raw_bc = (item.barcode or "").strip()
+            norm_bc = (normalize_scanned_code(raw_bc) or raw_bc).strip() if raw_bc else None
+            if norm_bc:
+                if norm_bc.lower() in seen_barcodes:
+                    skipped.append({
+                        "color_id": item.color_id,
+                        "size_id": item.size_id,
+                        "reason": f"Duplicate barcode '{norm_bc}' in bulk request",
+                    })
+                    continue
+                conflict = await cls._find_existing_variant_by_code(db, norm_bc)
+                if conflict is not None:
+                    skipped.append({
+                        "color_id": item.color_id,
+                        "size_id": item.size_id,
+                        "reason": f"Barcode '{norm_bc}' is already assigned to {conflict.sku}",
+                    })
+                    continue
+
+            cost = item.cost_price if item.cost_price is not None else body.default_cost_price
+            wholesale = item.wholesale_price if item.wholesale_price is not None else body.default_wholesale_price
+            item_status = (item.status_code or body.status_code or "ACTIVE").upper()
+
+            variant_body = PRODUCT_VARIANT_CREATE_FOR_PRODUCT_SCHEMA(
+                sku=raw_sku,
+                color_id=item.color_id,
+                size_id=item.size_id,
+                cost_price=cost,
+                selling_price=selling,
+                wholesale_price=wholesale,
+                barcode=norm_bc,
+                image_url=item.image_url,
+                status_code=item_status,
+                initial_stock=item.initial_stock,
+                warehouse_id=body.warehouse_id,
+            )
+            variant = await cls._create_variant_internal(db, product, variant_body)
+            existing.add(key)
+            if variant.barcode:
+                seen_barcodes.add(variant.barcode.lower())
+            if variant.sku:
+                seen_skus.add(variant.sku.lower())
+            created.append(variant)
+
+            if item.reorder_level is not None:
+                wh_id = body.warehouse_id
+                if not wh_id:
+                    wh_id = (await db.execute(
+                        select(Warehouse.id).order_by(Warehouse.is_default.desc()).limit(1)
+                    )).scalar_one_or_none()
+                if wh_id:
+                    stock = await stock_repo.get_or_create_stock(variant.id, wh_id, lock=True)
+                    stock.reorder_level = item.reorder_level
+
+        if created:
+            await cls.increment_catalog_version(db)
+            await cls.increment_inventory_version(db)
+        await db.commit()
+
+        repo = ProductVariantRepository(db)
+        loaded = [await repo.get_by_id(v.id) or v for v in created]
+        return {"created": loaded, "skipped": skipped}
+
+    @classmethod
+    async def get_stock_matrix(
+        cls,
+        db: AsyncSession,
+        product_id: UUID,
+        warehouse_id: Optional[UUID] = None,
+    ) -> Dict[str, Any]:
+        """Stock for one product laid out by color x size (optionally for a single warehouse)."""
+        product = await ProductRepository(db).get_by_id(product_id)
+        if not product:
+            raise NOT_FOUND_EXCEPTION("Product not found")
+
+        variants = list(
+            (await db.execute(
+                select(ProductVariant)
+                .where(ProductVariant.product_id == product_id)
+                .order_by(ProductVariant.created_at)
+            )).scalars().all()
+        )
+        variant_ids = [v.id for v in variants]
+
+        stock_rows = []
+        if variant_ids:
+            stmt = select(InventoryStock).where(InventoryStock.variant_id.in_(variant_ids))
+            if warehouse_id:
+                stmt = stmt.where(InventoryStock.warehouse_id == warehouse_id)
+            stock_rows = list((await db.execute(stmt)).scalars().all())
+
+        wh_stmt = select(Warehouse).order_by(Warehouse.is_default.desc(), Warehouse.name)
+        if warehouse_id:
+            wh_stmt = wh_stmt.where(Warehouse.id == warehouse_id)
+        warehouses = list((await db.execute(wh_stmt)).scalars().all())
+
+        by_variant: Dict[UUID, List[InventoryStock]] = {}
+        for row in stock_rows:
+            by_variant.setdefault(row.variant_id, []).append(row)
+
+        colors: Dict[Optional[UUID], Dict[str, Any]] = {}
+        sizes: Dict[Optional[UUID], Dict[str, Any]] = {}
+        cells: List[Dict[str, Any]] = []
+        total = low = out = 0
+        for v in variants:
+            colors.setdefault(v.color_id, {
+                "id": v.color_id,
+                "name": v.color.name if v.color else "Default",
+                "hex_code": v.color.hex_code if v.color else None,
+            })
+            sizes.setdefault(v.size_id, {
+                "id": v.size_id,
+                "name": v.size.name if v.size else "Default",
+                "hex_code": None,
+                "_sort": getattr(v.size, "sort_order", None) if v.size else None,
+            })
+            rows = by_variant.get(v.id, [])
+            qty = sum(r.quantity for r in rows)
+            reorder = sum(r.reorder_level for r in rows)
+            if qty <= 0:
+                state = "OUT"
+                out += 1
+            elif reorder > 0 and qty <= reorder:
+                state = "LOW"
+                low += 1
+            else:
+                state = "IN"
+            total += qty
+            cells.append({
+                "variant_id": v.id,
+                "sku": v.sku,
+                "barcode": v.barcode,
+                "color_id": v.color_id,
+                "size_id": v.size_id,
+                "status_code": v.status_code,
+                "quantity": qty,
+                "reorder_level": reorder,
+                "stock_status": state,
+                "by_warehouse": {str(r.warehouse_id): r.quantity for r in rows},
+            })
+
+        size_list = sorted(
+            sizes.values(),
+            key=lambda s: (s["_sort"] is None, s["_sort"] if s["_sort"] is not None else 0, s["name"]),
+        )
+        for s in size_list:
+            s.pop("_sort", None)
+
+        return {
+            "product_id": product_id,
+            "colors": sorted(colors.values(), key=lambda c: c["name"]),
+            "sizes": size_list,
+            "warehouses": [{"id": w.id, "name": w.name} for w in warehouses],
+            "cells": cells,
+            "total_quantity": total,
+            "low_count": low,
+            "out_count": out,
+        }
+
+    @classmethod
+    async def delete_variant(cls, db: AsyncSession, variant_id: UUID) -> bool:
+        """Delete a variant. Returns True if removed, False if only deactivated.
+
+        A variant that still holds stock or has any stock movement history is never removed
+        (that would destroy stock and break the audit trail); it is set INACTIVE instead.
+        """
         repo    = ProductVariantRepository(db)
         variant = await repo.get_by_id(variant_id)
         if not variant:
             raise NOT_FOUND_EXCEPTION("Variant not found")
+
+        on_hand = (await db.execute(
+            select(func.coalesce(func.sum(InventoryStock.quantity), 0))
+            .where(InventoryStock.variant_id == variant_id)
+        )).scalar_one()
+        moves = (await db.execute(
+            select(func.count()).select_from(InventoryMovement)
+            .where(InventoryMovement.variant_id == variant_id)
+        )).scalar_one()
+
+        if on_hand > 0 or moves > 0:
+            await repo.update(variant, status_code="INACTIVE")
+            await cls.increment_catalog_version(db)
+            await db.commit()
+            return False
+
         await repo.delete(variant)
         await cls.increment_catalog_version(db)
         await db.commit()
+        return True
 
     @classmethod
     async def get_variant_by_qr(cls, db: AsyncSession, reference: str) -> ProductVariant:
@@ -447,11 +949,112 @@ class PRODUCT_SERVICE:
         variant = await repo.get_by_id(variant_id)
         if not variant:
             raise NOT_FOUND_EXCEPTION("Variant not found")
-        variant = await repo.update(variant, **body.model_dump(exclude_none=True))
+
+        update_data = body.model_dump(exclude_unset=True)
+        # Do not overwrite non-nullable fields with None
+        for non_null_key in ("cost_price", "selling_price", "status_code"):
+            if non_null_key in update_data and update_data[non_null_key] is None:
+                update_data.pop(non_null_key)
+
+        if "sku" in update_data:
+            raw_sku = (update_data.get("sku") or "").strip().upper()
+            if raw_sku and raw_sku.lower() != variant.sku.lower():
+                sku_conflict = await cls._find_existing_variant_by_code(
+                    db, raw_sku, exclude_variant_id=variant.id
+                )
+                if sku_conflict is not None:
+                    raise CONFLICT_EXCEPTION(f"SKU '{raw_sku}' is already in use ({sku_conflict.sku})")
+                update_data["sku"] = raw_sku
+            else:
+                update_data.pop("sku", None)
+
+        new_color_id = update_data.get("color_id", variant.color_id)
+        new_size_id  = update_data.get("size_id", variant.size_id)
+        if new_color_id != variant.color_id or new_size_id != variant.size_id:
+            dup_combo = await cls._find_existing_color_size_variant(
+                db, variant.product_id, new_color_id, new_size_id, exclude_variant_id=variant.id
+            )
+            if dup_combo is not None:
+                raise CONFLICT_EXCEPTION(
+                    f"A variant with this color and size already exists for this product ({dup_combo.sku})"
+                )
+
+        if "barcode" in update_data:
+            raw_bc = (update_data.get("barcode") or "").strip()
+            if raw_bc:
+                resolved_bc = normalize_scanned_code(raw_bc) or raw_bc
+                conflict = await cls._find_existing_variant_by_code(
+                    db, resolved_bc, exclude_variant_id=variant.id
+                )
+                if conflict is not None:
+                    conflict_prod = conflict.product.name if getattr(conflict, "product", None) else "another product"
+                    raise CONFLICT_EXCEPTION(
+                        f"Barcode or QR code '{resolved_bc}' is already assigned to {conflict_prod} ({conflict.sku})"
+                    )
+                update_data["barcode"] = resolved_bc
+            elif not variant.barcode:
+                prod_code = variant.product.code if variant.product else "PROD-00001"
+                b_seq = 1
+                while True:
+                    candidate = generate_compact_barcode(prod_code, b_seq)
+                    if await cls._find_existing_variant_by_code(db, candidate, exclude_variant_id=variant.id) is None:
+                        update_data["barcode"] = candidate
+                        break
+                    b_seq += 1
+            else:
+                # Keep current barcode if user submitted empty barcode on edit
+                update_data.pop("barcode", None)
+
+        variant = await repo.update(variant, **update_data)
         await cls.increment_catalog_version(db)
         await db.commit()
         updated = await repo.get_by_id(variant.id)
         return updated or variant
+
+    @classmethod
+    async def patch_variant_status(cls, db: AsyncSession, variant_id: UUID, status_code: str) -> ProductVariant:
+        repo = ProductVariantRepository(db)
+        variant = await repo.get_by_id(variant_id)
+        if not variant:
+            raise NOT_FOUND_EXCEPTION("Variant not found")
+        clean_status = (status_code or "ACTIVE").strip().upper()
+        variant = await repo.update(variant, status_code=clean_status)
+        await cls.increment_catalog_version(db)
+        await db.commit()
+        updated = await repo.get_by_id(variant.id)
+        return updated or variant
+
+    @classmethod
+    async def bulk_update_variants(
+        cls,
+        db: AsyncSession,
+        product_id: UUID,
+        body: PRODUCT_VARIANT_BULK_UPDATE_SCHEMA,
+    ) -> List[ProductVariant]:
+        repo = ProductVariantRepository(db)
+        updated_list: List[ProductVariant] = []
+        for item in body.items:
+            variant = await repo.get_by_id(item.id)
+            if not variant or variant.product_id != product_id:
+                continue
+            fields: Dict[str, Any] = {}
+            if item.cost_price is not None:
+                fields["cost_price"] = item.cost_price
+            if item.selling_price is not None:
+                fields["selling_price"] = item.selling_price
+            if item.wholesale_price is not None:
+                fields["wholesale_price"] = item.wholesale_price
+            if item.status_code is not None:
+                fields["status_code"] = item.status_code.strip().upper()
+            if item.image_url is not None:
+                fields["image_url"] = item.image_url.strip() or None
+            if fields:
+                variant = await repo.update(variant, **fields)
+            updated_list.append(variant)
+        if updated_list:
+            await cls.increment_catalog_version(db)
+            await db.commit()
+        return [await repo.get_by_id(v.id) or v for v in updated_list]
 
     @classmethod
     async def regenerate_variant_codes(cls, db: AsyncSession, variant_id: UUID) -> ProductVariant:
@@ -459,25 +1062,257 @@ class PRODUCT_SERVICE:
         variant = await repo.get_by_id(variant_id)
         if not variant:
             raise NOT_FOUND_EXCEPTION("Variant not found")
-        new_qr = await generate_qr_reference(db)
+        old_qr = variant.qr_reference
+        old_bc = variant.barcode
+        new_qr = await cls._generate_unique_qr_reference(db)
         update_kwargs: Dict[str, Any] = {"qr_reference": new_qr}
         if not variant.barcode:
             prod_code = variant.product.code if variant.product else "PROD-00001"
             b_seq = 1
             while True:
                 candidate = generate_compact_barcode(prod_code, b_seq)
-                existing_bc = await db.execute(
-                    select(ProductVariant.id).where(ProductVariant.barcode == candidate)
-                )
-                if existing_bc.scalar_one_or_none() is None:
+                if await cls._find_existing_variant_by_code(db, candidate, exclude_variant_id=variant.id) is None:
                     update_kwargs["barcode"] = candidate
                     break
                 b_seq += 1
         variant = await repo.update(variant, **update_kwargs)
+        from app.services.audit_service import AUDIT_SERVICE
+        await AUDIT_SERVICE.record(
+            db,
+            action="VARIANT_CODES_REGENERATED",
+            entity_type="product_variant",
+            entity_id=variant.id,
+            old_data={"sku": variant.sku, "qr_reference": old_qr, "barcode": old_bc},
+            new_data={"sku": variant.sku, "qr_reference": variant.qr_reference, "barcode": variant.barcode},
+        )
         await cls.increment_catalog_version(db)
         await db.commit()
         updated = await repo.get_by_id(variant.id)
         return updated or variant
+
+    # ── Configurable Product Attributes ───────────────────────────────────────
+    @classmethod
+    async def list_product_attributes(cls, db: AsyncSession) -> List[ProductAttribute]:
+        res = await db.execute(
+            select(ProductAttribute)
+            .where(ProductAttribute.status_code == "ACTIVE")
+            .options(selectinload(ProductAttribute.values))
+            .order_by(ProductAttribute.sort_order, ProductAttribute.name)
+        )
+        return list(res.scalars().all())
+
+    @classmethod
+    async def create_product_attribute(
+        cls,
+        db: AsyncSession,
+        body: PRODUCT_ATTRIBUTE_CREATE_SCHEMA,
+    ) -> ProductAttribute:
+        clean_code = slugify(body.code or body.name, separator="_").lower()
+        existing = await db.execute(
+            select(ProductAttribute.id).where(func.lower(ProductAttribute.code) == clean_code)
+        )
+        if existing.scalar_one_or_none() is not None:
+            raise CONFLICT_EXCEPTION(f"Attribute code '{clean_code}' already exists")
+
+        attr = ProductAttribute(
+            code=clean_code,
+            name=body.name.strip(),
+            display_name=(body.display_name or body.name).strip(),
+            attribute_type=(body.attribute_type or "SELECT").upper(),
+            sort_order=body.sort_order,
+            status_code=body.status_code or "ACTIVE",
+        )
+        db.add(attr)
+        await db.flush()
+
+        for idx, val_in in enumerate(body.values or []):
+            clean_val = val_in.value.strip().upper()
+            if not clean_val:
+                continue
+            db.add(
+                ProductAttributeValue(
+                    attribute_id=attr.id,
+                    value=clean_val,
+                    display_value=(val_in.display_value or val_in.value).strip(),
+                    sort_order=val_in.sort_order if val_in.sort_order else idx + 1,
+                    status_code=val_in.status_code or "ACTIVE",
+                )
+            )
+        await db.commit()
+        res = await db.execute(
+            select(ProductAttribute)
+            .where(ProductAttribute.id == attr.id)
+            .options(selectinload(ProductAttribute.values))
+        )
+        return res.scalar_one()
+
+    @classmethod
+    async def update_product_attribute(
+        cls,
+        db: AsyncSession,
+        attribute_id: UUID,
+        body: PRODUCT_ATTRIBUTE_UPDATE_SCHEMA,
+    ) -> ProductAttribute:
+        res = await db.execute(
+            select(ProductAttribute)
+            .where(ProductAttribute.id == attribute_id)
+            .options(selectinload(ProductAttribute.values))
+        )
+        attr = res.scalar_one_or_none()
+        if not attr:
+            raise NOT_FOUND_EXCEPTION("Product attribute not found")
+
+        for k, v in body.model_dump(exclude_none=True).items():
+            setattr(attr, k, v)
+        await db.commit()
+        await db.refresh(attr)
+        return attr
+
+    @classmethod
+    async def add_product_attribute_value(
+        cls,
+        db: AsyncSession,
+        attribute_id: UUID,
+        body: PRODUCT_ATTRIBUTE_VALUE_CREATE_SCHEMA,
+    ) -> ProductAttributeValue:
+        res = await db.execute(select(ProductAttribute).where(ProductAttribute.id == attribute_id))
+        attr = res.scalar_one_or_none()
+        if not attr:
+            raise NOT_FOUND_EXCEPTION("Product attribute not found")
+
+        clean_val = body.value.strip().upper()
+        dup = await db.execute(
+            select(ProductAttributeValue.id).where(
+                ProductAttributeValue.attribute_id == attribute_id,
+                func.lower(ProductAttributeValue.value) == clean_val.lower(),
+            )
+        )
+        if dup.scalar_one_or_none() is not None:
+            raise CONFLICT_EXCEPTION(f"Attribute value '{clean_val}' already exists")
+
+        val_obj = ProductAttributeValue(
+            attribute_id=attribute_id,
+            value=clean_val,
+            display_value=(body.display_value or body.value).strip(),
+            sort_order=body.sort_order,
+            status_code=body.status_code or "ACTIVE",
+        )
+        db.add(val_obj)
+        await db.commit()
+        await db.refresh(val_obj)
+        return val_obj
+
+    # ── Product Images Management ─────────────────────────────────────────────
+    @classmethod
+    async def add_product_image(
+        cls,
+        db: AsyncSession,
+        product_id: UUID,
+        body: PRODUCT_IMAGE_CREATE_SCHEMA,
+    ) -> ProductImage:
+        product = await ProductRepository(db).get_by_id(product_id)
+        if not product:
+            raise NOT_FOUND_EXCEPTION("Product not found")
+
+        existing = list(
+            (await db.execute(select(ProductImage).where(ProductImage.product_id == product_id))).scalars().all()
+        )
+        is_primary = bool(body.is_primary) or len(existing) == 0
+        if is_primary:
+            for ex in existing:
+                ex.is_primary = False
+
+        img = ProductImage(
+            product_id=product_id,
+            variant_id=body.variant_id,
+            image_url=body.image_url.strip(),
+            is_primary=is_primary,
+            sort_order=body.sort_order if body.sort_order else len(existing),
+            status_code="ACTIVE",
+        )
+        db.add(img)
+        if is_primary:
+            product.image_url = img.image_url
+        await cls.increment_catalog_version(db)
+        await db.commit()
+        await db.refresh(img)
+        return img
+
+    @classmethod
+    async def update_product_image(
+        cls,
+        db: AsyncSession,
+        product_id: UUID,
+        image_id: UUID,
+        body: PRODUCT_IMAGE_UPDATE_SCHEMA,
+    ) -> ProductImage:
+        product = await ProductRepository(db).get_by_id(product_id)
+        if not product:
+            raise NOT_FOUND_EXCEPTION("Product not found")
+
+        res = await db.execute(
+            select(ProductImage).where(ProductImage.id == image_id, ProductImage.product_id == product_id)
+        )
+        img = res.scalar_one_or_none()
+        if not img:
+            raise NOT_FOUND_EXCEPTION("Product image not found")
+
+        if body.is_primary is True:
+            others = list(
+                (await db.execute(select(ProductImage).where(ProductImage.product_id == product_id))).scalars().all()
+            )
+            for o in others:
+                o.is_primary = (o.id == image_id)
+            product.image_url = img.image_url
+
+        if body.sort_order is not None:
+            img.sort_order = body.sort_order
+        if "variant_id" in body.model_fields_set:
+            img.variant_id = body.variant_id
+
+        await cls.increment_catalog_version(db)
+        await db.commit()
+        await db.refresh(img)
+        return img
+
+    @classmethod
+    async def delete_product_image(
+        cls,
+        db: AsyncSession,
+        product_id: UUID,
+        image_id: UUID,
+    ) -> None:
+        product = await ProductRepository(db).get_by_id(product_id)
+        if not product:
+            raise NOT_FOUND_EXCEPTION("Product not found")
+
+        res = await db.execute(
+            select(ProductImage).where(ProductImage.id == image_id, ProductImage.product_id == product_id)
+        )
+        img = res.scalar_one_or_none()
+        if not img:
+            raise NOT_FOUND_EXCEPTION("Product image not found")
+
+        was_primary = img.is_primary
+        await db.delete(img)
+        await db.flush()
+
+        remaining = list(
+            (await db.execute(
+                select(ProductImage)
+                .where(ProductImage.product_id == product_id)
+                .order_by(ProductImage.sort_order)
+            )).scalars().all()
+        )
+        if was_primary:
+            if remaining:
+                remaining[0].is_primary = True
+                product.image_url = remaining[0].image_url
+            else:
+                product.image_url = None
+
+        await cls.increment_catalog_version(db)
+        await db.commit()
 
     @classmethod
     async def scan_lookup(

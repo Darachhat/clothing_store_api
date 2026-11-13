@@ -54,7 +54,7 @@ class BRAND_SETTINGS_SCHEMA(BaseModel):
     tagline: Optional[str] = Field(default="Premium Streetwear & Contemporary Fashion", max_length=200)
     tagline_kh: Optional[str] = Field(default="សម្លៀកបំពាក់ទាន់សម័យ និងគុណភាពខ្ពស់", max_length=200)
     logo_url: Optional[str] = Field(default="", max_length=500, description="Primary brand logo (light surfaces)")
-    logo_dark_url: Optional[str] = Field(default="", max_length=500, description="Brand logo (dark surfaces)")
+    logo_dark_url: Optional[str] = Field(default="", max_length=500, description="BRAND_MODEL logo (dark surfaces)")
     favicon_url: Optional[str] = Field(default="", max_length=500, description="Browser favicon URL")
     phone: Optional[str] = Field(default="+855 23 888 999", max_length=50)
     email: Optional[str] = Field(default="store@kimvannak.store", max_length=100)

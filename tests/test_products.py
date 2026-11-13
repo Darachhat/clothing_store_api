@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.models import Branch, Warehouse
-from app.models import Brand, Category, Color, Product, ProductVariant, Size
-from app.models import Permission, Role, User
+from app.models import BRAND_MODEL, CATEGORY_MODEL, Color, Product, ProductVariant, Size
+from app.models import PERMISSION_MODEL, ROLE_MODEL, User
 from app.repositories.product_repository import ProductRepository, ProductVariantRepository
 
 
@@ -23,9 +23,9 @@ async def create_catalog_infra(db: AsyncSession):
     db.add(warehouse)
     await db.flush()
 
-    category = Category(name="Catalog T-Shirts", slug="catalog-t-shirts")
+    category = CATEGORY_MODEL(name="Catalog T-Shirts", slug="catalog-t-shirts")
     db.add(category)
-    brand = Brand(name="CatalogBrand", slug="catalogbrand")
+    brand = BRAND_MODEL(name="CatalogBrand", slug="catalogbrand")
     db.add(brand)
     color_black = Color(name="CatalogBlack", hex_code="#000001")
     color_white = Color(name="CatalogWhite", hex_code="#FFFFFF")
@@ -35,13 +35,13 @@ async def create_catalog_infra(db: AsyncSession):
     db.add_all([size_m, size_l])
     await db.flush()
 
-    product_perm = Permission(code="product.read", name="Read Product", module="products")
-    product_create_perm = Permission(code="product.create", name="Create Product", module="products")
-    report_perm = Permission(code="report.read", name="Read Reports", module="reports")
+    product_perm = PERMISSION_MODEL(code="product.read", name="Read Product", module="products")
+    product_create_perm = PERMISSION_MODEL(code="product.create", name="Create Product", module="products")
+    report_perm = PERMISSION_MODEL(code="report.read", name="Read Reports", module="reports")
     db.add_all([product_perm, product_create_perm, report_perm])
     await db.flush()
 
-    role = Role(
+    role = ROLE_MODEL(
         name="CATALOG_MANAGER_TEST",
         is_system=True,
         permissions=[product_perm, product_create_perm, report_perm],

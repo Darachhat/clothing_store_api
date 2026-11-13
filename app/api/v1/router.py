@@ -7,7 +7,7 @@ from app.api.v1.handlers.system_handler import router as system_router
 from app.api.v1.handlers.telegram_handler import router as telegram_router
 from app.api.v1.handlers.payment_gateway_handler import router as payment_gateway_router
 from app.api.v1.handlers.log_handler import router as log_router
-from app.api.v1.handlers.product_handler import router as products_router, variant_router
+from app.api.v1.handlers.product_handler import attribute_router, router as products_router, variant_router
 from app.api.v1.handlers.attachment_handler import router as attachments_router, uploads_router
 from app.api.v1.handlers.branch_handler import router as branches_router, warehouses_router
 from app.api.v1.handlers.terminal_handler import router as terminals_router
@@ -53,6 +53,7 @@ router.include_router(uploads_router)
 router.include_router(scanner_router)
 router.include_router(products_router)
 router.include_router(variant_router)
+router.include_router(attribute_router)
 router.include_router(categories_router)
 router.include_router(colors_router)
 router.include_router(sizes_router)

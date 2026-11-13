@@ -16,7 +16,7 @@ from app.api.store.auth import require_customer
 from app.api.v1.handlers.auth_handler import clear_session_cookies, set_session_cookies
 from app.core.database import get_db
 from app.core.security import hash_password
-from app.models import Role, User
+from app.models import ROLE_MODEL, User
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth_schema import (
     LOGIN_REQUEST_SCHEMA,
@@ -67,10 +67,10 @@ async def register_customer(
         raise HTTPException(status_code=400, detail="Email already registered.")
 
     # Get or create CUSTOMER role
-    result = await db.execute(select(Role).where(Role.name == "CUSTOMER"))
+    result = await db.execute(select(ROLE_MODEL).where(ROLE_MODEL.name == "CUSTOMER"))
     customer_role = result.scalar_one_or_none()
     if not customer_role:
-        customer_role = Role(name="CUSTOMER", description="Web store customer", is_system=True)
+        customer_role = ROLE_MODEL(name="CUSTOMER", description="Web store customer", is_system=True)
         db.add(customer_role)
         await db.flush()
 

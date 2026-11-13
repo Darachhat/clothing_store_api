@@ -69,7 +69,7 @@ class UNAUTHORIZED_EXCEPTION(APP_EXCEPTION):
 class FORBIDDEN_EXCEPTION(APP_EXCEPTION):
     def __init__(
         self
-        , message : str                 = "Permission denied"
+        , message : str                 = "PERMISSION_MODEL denied"
         , errors  : Optional[List[str]] = None
     ):
         super().__init__(

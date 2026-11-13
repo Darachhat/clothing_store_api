@@ -87,7 +87,7 @@ async def get_category(
     repo = CategoryRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CATEGORY_MODEL not found")
     return obj
 
 
@@ -102,7 +102,7 @@ async def update_category(
     repo = CategoryRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CATEGORY_MODEL not found")
     data = body.model_dump(exclude_unset=True)
     if "name" in data and "slug" not in data:
         data["slug"] = slugify(data["name"])
@@ -121,7 +121,7 @@ async def delete_category(
     repo = CategoryRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CATEGORY_MODEL not found")
     assigned_count = (
         await db.execute(
             select(func.count()).select_from(Product).where(Product.category_id == id, Product.status != "ARCHIVED")
@@ -329,7 +329,7 @@ async def get_brand(
     repo = BrandRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Brand not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BRAND_MODEL not found")
     return obj
 
 
@@ -344,7 +344,7 @@ async def update_brand(
     repo = BrandRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Brand not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BRAND_MODEL not found")
     data = body.model_dump(exclude_unset=True)
     if "name" in data and "slug" not in data:
         data["slug"] = slugify(data["name"])
@@ -363,7 +363,7 @@ async def delete_brand(
     repo = BrandRepository(db)
     obj = await repo.get_by_id(id)
     if not obj:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Brand not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BRAND_MODEL not found")
     assigned_count = (
         await db.execute(
             select(func.count()).select_from(Product).where(Product.brand_id == id, Product.status != "ARCHIVED")

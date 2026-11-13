@@ -1,4 +1,4 @@
-"""User and Role Administration API endpoints."""
+"""User and ROLE_MODEL Administration API endpoints."""
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.deps import require_permission
 from app.core.security import hash_password
 from app.core.utils.phone_utils import normalize_phone_number
-from app.models import AuditLog, Permission, Role, User
+from app.models import AuditLog, PERMISSION_MODEL, ROLE_MODEL, User
 from app.repositories.user_repository import (
     PermissionRepository,
     RefreshTokenRepository,
@@ -32,7 +32,7 @@ from app.schemas.auth_schema import (
 from app.services.audit_service import AUDIT_SERVICE
 
 users_router = APIRouter(prefix="/users", tags=["User Administration"])
-roles_router = APIRouter(prefix="/roles", tags=["Role & Permission Administration"])
+roles_router = APIRouter(prefix="/roles", tags=["ROLE_MODEL & PERMISSION_MODEL Administration"])
 
 
 # ── User Endpoints ────────────────────────────────────────────────────────────
@@ -90,9 +90,9 @@ async def create_user(
             )
 
     # Fetch assigned roles
-    roles: list[Role] = []
+    roles: list[ROLE_MODEL] = []
     if payload.role_ids:
-        role_stmt = select(Role).where(Role.id.in_(payload.role_ids))
+        role_stmt = select(ROLE_MODEL).where(ROLE_MODEL.id.in_(payload.role_ids))
         roles_result = await db.execute(role_stmt)
         roles = list(roles_result.scalars().all())
 
@@ -253,7 +253,7 @@ async def update_user(
         user.telegram_photo_url = None
         user.telegram_linked_at = None
 
-    # Role assignments
+    # ROLE_MODEL assignments
     roles_changed = False
     if payload.role_ids is not None:
         requested_role_ids = set(payload.role_ids)
@@ -263,7 +263,7 @@ async def update_user(
                 detail="Users cannot modify their own role assignments",
             )
         if payload.role_ids:
-            role_stmt = select(Role).where(Role.id.in_(payload.role_ids))
+            role_stmt = select(ROLE_MODEL).where(ROLE_MODEL.id.in_(payload.role_ids))
             roles_result = await db.execute(role_stmt)
             new_roles = list(roles_result.scalars().all())
         else:
@@ -403,13 +403,13 @@ async def deactivate_user(
     return await repo.get_by_id(user.id)
 
 
-# ── Role Endpoints ────────────────────────────────────────────────────────────
+# ── ROLE_MODEL Endpoints ────────────────────────────────────────────────────────────
 @roles_router.get("", response_model=list[ROLE_RESPONSE_SCHEMA], include_in_schema=False)
 @roles_router.get("/", response_model=list[ROLE_RESPONSE_SCHEMA])
 async def list_roles(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("user.manage")),
-) -> list[Role]:
+) -> list[ROLE_MODEL]:
     repo = RoleRepository(db)
     return await repo.get_all_roles()
 
@@ -418,7 +418,7 @@ async def list_roles(
 async def list_permissions(
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("user.manage")),
-) -> list[Permission]:
+) -> list[PERMISSION_MODEL]:
     repo = PermissionRepository(db)
     return await repo.get_all_permissions()
 
@@ -429,19 +429,19 @@ async def create_role(
     payload: ROLE_CREATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(require_permission("user.manage")),
-) -> Role:
+) -> ROLE_MODEL:
     repo = RoleRepository(db)
     existing = await repo.get_by_name(payload.name.upper().strip())
     if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Role name already exists")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="ROLE_MODEL name already exists")
 
     perms = []
     if payload.permission_ids:
-        stmt = select(Permission).where(Permission.id.in_(payload.permission_ids))
+        stmt = select(PERMISSION_MODEL).where(PERMISSION_MODEL.id.in_(payload.permission_ids))
         res = await db.execute(stmt)
         perms = list(res.scalars().all())
 
-    role = Role(
+    role = ROLE_MODEL(
         name=payload.name.upper().strip(),
         description=payload.description,
         is_system=False,
@@ -459,11 +459,11 @@ async def update_role(
     payload: ROLE_UPDATE_SCHEMA,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("user.manage")),
-) -> Role:
+) -> ROLE_MODEL:
     repo = RoleRepository(db)
     role = await repo.get_by_id(role_id)
     if not role:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ROLE_MODEL not found")
     if role.is_system and payload.name and payload.name.upper() != role.name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot rename system role")
 
@@ -474,7 +474,7 @@ async def update_role(
         role.description = payload.description
     if payload.permission_ids is not None:
         if payload.permission_ids:
-            stmt = select(Permission).where(Permission.id.in_(payload.permission_ids))
+            stmt = select(PERMISSION_MODEL).where(PERMISSION_MODEL.id.in_(payload.permission_ids))
             res = await db.execute(stmt)
             role.permissions = list(res.scalars().all())
         else:
@@ -502,7 +502,7 @@ async def delete_role(
     repo = RoleRepository(db)
     role = await repo.get_by_id(role_id)
     if not role:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="ROLE_MODEL not found")
     if role.is_system:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete system role")
     await repo.delete(role)

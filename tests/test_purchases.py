@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.models import Branch, Warehouse
-from app.models import Brand, Category, Color, Product, ProductVariant, Size, Supplier
-from app.models import Role, User
+from app.models import BRAND_MODEL, CATEGORY_MODEL, Color, Product, ProductVariant, Size, Supplier
+from app.models import ROLE_MODEL, User
 from app.repositories.inventory_repository import InventoryStockRepository
 from app.schemas.purchase_schema import (
     GOODS_RECEIPT_CREATE_SCHEMA,
@@ -32,9 +32,9 @@ async def create_purchase_test_infra(db: AsyncSession):
     supplier = Supplier(code="SUPP-001", name="Alpha Supplier", phone="123456")
     db.add(supplier)
 
-    category = Category(name="Pants", slug="pants")
+    category = CATEGORY_MODEL(name="Pants", slug="pants")
     db.add(category)
-    brand = Brand(name="DenimCo", slug="denimco")
+    brand = BRAND_MODEL(name="DenimCo", slug="denimco")
     db.add(brand)
     color = Color(name="Blue", hex_code="#0000FF")
     db.add(color)
@@ -64,7 +64,7 @@ async def create_purchase_test_infra(db: AsyncSession):
     )
     db.add(variant)
 
-    role = Role(name="PURCHASE_MANAGER", is_system=True)
+    role = ROLE_MODEL(name="PURCHASE_MANAGER", is_system=True)
     db.add(role)
     await db.flush()
 

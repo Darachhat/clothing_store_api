@@ -7,7 +7,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import selectinload
 
 from app.core.utils.phone_utils import get_equivalent_phone_formats, normalize_phone_number
-from app.models import Permission, RefreshToken, Role, User
+from app.models import PERMISSION_MODEL, RefreshToken, ROLE_MODEL, User
 from app.repositories.base import BaseRepository
 
 
@@ -19,7 +19,7 @@ class UserRepository(BaseRepository[User]):
         result = await self.db.execute(
             select(User)
             .where(User.id == id)
-            .options(selectinload(User.roles).selectinload(Role.permissions))
+            .options(selectinload(User.roles).selectinload(ROLE_MODEL.permissions))
         )
         return result.scalar_one_or_none()
 
@@ -27,7 +27,7 @@ class UserRepository(BaseRepository[User]):
         result = await self.db.execute(
             select(User)
             .where(User.username == username)
-            .options(selectinload(User.roles).selectinload(Role.permissions))
+            .options(selectinload(User.roles).selectinload(ROLE_MODEL.permissions))
         )
         return result.scalar_one_or_none()
 
@@ -35,7 +35,7 @@ class UserRepository(BaseRepository[User]):
         result = await self.db.execute(
             select(User)
             .where(User.email == email)
-            .options(selectinload(User.roles).selectinload(Role.permissions))
+            .options(selectinload(User.roles).selectinload(ROLE_MODEL.permissions))
         )
         return result.scalar_one_or_none()
 
@@ -43,7 +43,7 @@ class UserRepository(BaseRepository[User]):
         result = await self.db.execute(
             select(User)
             .where(User.telegram_id == str(telegram_id).strip())
-            .options(selectinload(User.roles).selectinload(Role.permissions))
+            .options(selectinload(User.roles).selectinload(ROLE_MODEL.permissions))
         )
         return result.scalar_one_or_none()
 
@@ -55,7 +55,7 @@ class UserRepository(BaseRepository[User]):
         result = await self.db.execute(
             select(User)
             .where(User.phone_number.in_(variants))
-            .options(selectinload(User.roles).selectinload(Role.permissions))
+            .options(selectinload(User.roles).selectinload(ROLE_MODEL.permissions))
         )
         return result.scalar_one_or_none()
 
@@ -106,7 +106,7 @@ class UserRepository(BaseRepository[User]):
         if status:
             stmt = stmt.where(User.status == status.upper())
         if role:
-            stmt = stmt.where(User.roles.any(Role.name == role.upper().strip()))
+            stmt = stmt.where(User.roles.any(ROLE_MODEL.name == role.upper().strip()))
         if telegram_linked is True:
             stmt = stmt.where(User.telegram_id.is_not(None))
         elif telegram_linked is False:
@@ -150,7 +150,7 @@ class UserRepository(BaseRepository[User]):
     ) -> list[User]:
         stmt = (
             select(User)
-            .options(selectinload(User.roles).selectinload(Role.permissions))
+            .options(selectinload(User.roles).selectinload(ROLE_MODEL.permissions))
             .order_by(User.created_at.desc())
         )
         stmt = self._apply_filters(
@@ -190,40 +190,40 @@ class UserRepository(BaseRepository[User]):
         return result.scalar_one()
 
 
-class RoleRepository(BaseRepository[Role]):
+class RoleRepository(BaseRepository[ROLE_MODEL]):
     def __init__(self, db) -> None:
-        super().__init__(Role, db)
+        super().__init__(ROLE_MODEL, db)
 
-    async def get_by_id(self, id: UUID) -> Role | None:
+    async def get_by_id(self, id: UUID) -> ROLE_MODEL | None:
         stmt = (
-            select(Role)
-            .where(Role.id == id)
-            .options(selectinload(Role.permissions))
+            select(ROLE_MODEL)
+            .where(ROLE_MODEL.id == id)
+            .options(selectinload(ROLE_MODEL.permissions))
         )
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_by_name(self, name: str) -> Role | None:
+    async def get_by_name(self, name: str) -> ROLE_MODEL | None:
         stmt = (
-            select(Role)
-            .where(Role.name == name)
-            .options(selectinload(Role.permissions))
+            select(ROLE_MODEL)
+            .where(ROLE_MODEL.name == name)
+            .options(selectinload(ROLE_MODEL.permissions))
         )
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_all_roles(self) -> list[Role]:
-        stmt = select(Role).options(selectinload(Role.permissions)).order_by(Role.name)
+    async def get_all_roles(self) -> list[ROLE_MODEL]:
+        stmt = select(ROLE_MODEL).options(selectinload(ROLE_MODEL.permissions)).order_by(ROLE_MODEL.name)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
 
 class PermissionRepository(BaseRepository):
     def __init__(self, db) -> None:
-        super().__init__(Permission, db)
+        super().__init__(PERMISSION_MODEL, db)
 
     async def get_all_permissions(self):
-        stmt = select(Permission).order_by(Permission.module, Permission.code)
+        stmt = select(PERMISSION_MODEL).order_by(PERMISSION_MODEL.module, PERMISSION_MODEL.code)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 

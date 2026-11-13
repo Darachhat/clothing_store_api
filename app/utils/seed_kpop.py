@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
 from app.models import Warehouse
-from app.models import Brand, Category, Color, Product, ProductVariant, Size, Supplier
+from app.models import BRAND_MODEL, CATEGORY_MODEL, Color, Product, ProductVariant, Size, Supplier
 from app.models import InventoryStock
 from app.utils.generators import generate_qr_reference, generate_sku
 
@@ -36,10 +36,10 @@ async def main():
         categories = ["T-Shirts", "Hoodies", "Jeans", "Jackets", "Accessories"]
         cat_map = {}
         for cname in categories:
-            res = await db.execute(select(Category).where(Category.name == cname))
+            res = await db.execute(select(CATEGORY_MODEL).where(CATEGORY_MODEL.name == cname))
             cat = res.scalars().first()
             if not cat:
-                cat = Category(name=cname, slug=slugify(cname), status="ACTIVE")
+                cat = CATEGORY_MODEL(name=cname, slug=slugify(cname), status="ACTIVE")
                 db.add(cat)
                 await db.flush()
             cat_map[cname] = cat
@@ -82,10 +82,10 @@ async def main():
         ]
         brand_map = {}
         for bname, bslug, blogo, bdesc in brands_data:
-            res = await db.execute(select(Brand).where(Brand.name == bname))
+            res = await db.execute(select(BRAND_MODEL).where(BRAND_MODEL.name == bname))
             b = res.scalars().first()
             if not b:
-                b = Brand(name=bname, slug=bslug, logo_url=blogo, description=bdesc, status="ACTIVE")
+                b = BRAND_MODEL(name=bname, slug=bslug, logo_url=blogo, description=bdesc, status="ACTIVE")
                 db.add(b)
                 await db.flush()
             else:

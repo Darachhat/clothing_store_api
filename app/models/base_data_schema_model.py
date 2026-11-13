@@ -252,3 +252,46 @@ class SYSTEM_SETTING_MODEL(BASE_MODEL):
     key                         : Mapped[str]                       = mapped_column(String(100), nullable=False)
     value                       : Mapped[dict]                      = mapped_column(JSONB, nullable=False, default=dict)
     description                 : Mapped[Optional[str]]             = mapped_column(String(255), nullable=True)
+
+
+# ── PRODUCT_ATTRIBUTE_MODEL ───────────────────────────────────────────────────
+class PRODUCT_ATTRIBUTE_MODEL(BASE_MODEL):
+    __tablename__               = "product_attributes"
+    __table_args__              = {"schema": "base_data"}
+
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code                        : Mapped[str]                       = mapped_column(String(100), unique=True, nullable=False, index=True)
+    name                        : Mapped[str]                       = mapped_column(String(200), nullable=False)
+    display_name                : Mapped[str]                       = mapped_column(String(200), nullable=False)
+    attribute_type              : Mapped[str]                       = mapped_column(String(50), default="SELECT", nullable=False)
+    sort_order                  : Mapped[int]                       = mapped_column(Integer, default=0, nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
+
+    values                      : Mapped[list[PRODUCT_ATTRIBUTE_VALUE_MODEL]] = relationship(
+        "PRODUCT_ATTRIBUTE_VALUE_MODEL",
+        back_populates="attribute",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="PRODUCT_ATTRIBUTE_VALUE_MODEL.sort_order",
+    )
+
+
+# ── PRODUCT_ATTRIBUTE_VALUE_MODEL ─────────────────────────────────────────────
+class PRODUCT_ATTRIBUTE_VALUE_MODEL(BASE_MODEL):
+    __tablename__               = "product_attribute_values"
+    __table_args__              = (
+        UniqueConstraint("attribute_id", "value", name="uq_product_attr_value"),
+        {"schema": "base_data"},
+    )
+
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    attribute_id                : Mapped[uuid.UUID]                 = mapped_column(
+        UUID(as_uuid=True), ForeignKey("base_data.product_attributes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    value                       : Mapped[str]                       = mapped_column(String(200), nullable=False)
+    display_value               : Mapped[str]                       = mapped_column(String(200), nullable=False)
+    sort_order                  : Mapped[int]                       = mapped_column(Integer, default=0, nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
+
+    attribute                   : Mapped[PRODUCT_ATTRIBUTE_MODEL]   = relationship("PRODUCT_ATTRIBUTE_MODEL", back_populates="values")
+

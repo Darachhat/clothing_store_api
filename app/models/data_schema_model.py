@@ -33,17 +33,16 @@ from app.core.database import BASE_MODEL
 if TYPE_CHECKING:
     from app.models.base_data_schema_model import (
         BRAND_MODEL,
-        Brand,
         CATEGORY_MODEL,
-        Category,
         COLOR_MODEL,
         Color,
         EXPENSE_CATEGORY_MODEL,
         ExpenseCategory,
         PERMISSION_MODEL,
-        Permission,
+        PRODUCT_ATTRIBUTE_MODEL,
+        PRODUCT_ATTRIBUTE_VALUE_MODEL,
         ROLE_MODEL,
-        Role,
+        ROLE_MODEL,
         SIZE_MODEL,
         Size,
     )
@@ -287,6 +286,7 @@ class PRODUCT_MODEL(BASE_MODEL):
         UUID(as_uuid=True), ForeignKey("data.suppliers.id", ondelete="SET NULL"), nullable=True
     )
     image_url                   : Mapped[Optional[str]]             = mapped_column(String(500), nullable=True)
+    tags                        : Mapped[list[str]]                 = mapped_column(JSONB, default=list, nullable=False)
     status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
 
     category                    : Mapped[Optional[CATEGORY_MODEL]]  = relationship("CATEGORY_MODEL", back_populates="products", lazy="selectin")
@@ -295,6 +295,66 @@ class PRODUCT_MODEL(BASE_MODEL):
     variants                    : Mapped[list[PRODUCT_VARIANT_MODEL]] = relationship(
         "PRODUCT_VARIANT_MODEL", back_populates="product", cascade="all, delete-orphan", lazy="selectin"
     )
+    images                      : Mapped[list[PRODUCT_IMAGE_MODEL]] = relationship(
+        "PRODUCT_IMAGE_MODEL",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="PRODUCT_IMAGE_MODEL.sort_order",
+    )
+    attribute_assignments       : Mapped[list[PRODUCT_ATTRIBUTE_ASSIGNMENT_MODEL]] = relationship(
+        "PRODUCT_ATTRIBUTE_ASSIGNMENT_MODEL",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+# ── PRODUCT_IMAGE_MODEL ───────────────────────────────────────────────────────
+class PRODUCT_IMAGE_MODEL(BASE_MODEL):
+    __tablename__               = "product_images"
+    __table_args__              = {"schema": "data"}
+
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    product_id                  : Mapped[uuid.UUID]                 = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    variant_id                  : Mapped[Optional[uuid.UUID]]       = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.product_variants.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    image_url                   : Mapped[str]                       = mapped_column(String(500), nullable=False)
+    is_primary                  : Mapped[bool]                      = mapped_column(Boolean, default=False, nullable=False)
+    sort_order                  : Mapped[int]                       = mapped_column(Integer, default=0, nullable=False)
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
+
+    product                     : Mapped[PRODUCT_MODEL]             = relationship("PRODUCT_MODEL", back_populates="images")
+    variant                     : Mapped[Optional[PRODUCT_VARIANT_MODEL]] = relationship("PRODUCT_VARIANT_MODEL")
+
+
+# ── PRODUCT_ATTRIBUTE_ASSIGNMENT_MODEL ────────────────────────────────────────
+class PRODUCT_ATTRIBUTE_ASSIGNMENT_MODEL(BASE_MODEL):
+    __tablename__               = "product_attribute_assignments"
+    __table_args__              = (
+        UniqueConstraint("product_id", "attribute_id", "attribute_value_id", name="uq_product_attr_assignment"),
+        {"schema": "data"},
+    )
+
+    id                          : Mapped[uuid.UUID]                 = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    product_id                  : Mapped[uuid.UUID]                 = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data.products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    attribute_id                : Mapped[uuid.UUID]                 = mapped_column(
+        UUID(as_uuid=True), ForeignKey("base_data.product_attributes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    attribute_value_id          : Mapped[uuid.UUID]                 = mapped_column(
+        UUID(as_uuid=True), ForeignKey("base_data.product_attribute_values.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
+
+    product                     : Mapped[PRODUCT_MODEL]             = relationship("PRODUCT_MODEL", back_populates="attribute_assignments")
+    attribute                   : Mapped[PRODUCT_ATTRIBUTE_MODEL]   = relationship("PRODUCT_ATTRIBUTE_MODEL", lazy="selectin")
+    attribute_value             : Mapped[PRODUCT_ATTRIBUTE_VALUE_MODEL] = relationship("PRODUCT_ATTRIBUTE_VALUE_MODEL", lazy="selectin")
+
 
 
 # ── PRODUCT_VARIANT_MODEL ─────────────────────────────────────────────────────

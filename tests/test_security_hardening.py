@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, hash_password
 from app.models import Sale
-from app.models import Role, User
+from app.models import ROLE_MODEL, User
 from app.repositories.inventory_repository import InventoryStockRepository
 from test_sales import create_sale_test_infra
 
@@ -161,7 +161,7 @@ async def test_pos_sales_are_not_reachable_through_store_lane(
 async def test_customer_order_is_private_to_its_owner(client: AsyncClient, db: AsyncSession) -> None:
     infra = await create_sale_test_infra(db)
 
-    role = Role(name="CUSTOMER", description="Web store customer", is_system=True)
+    role = ROLE_MODEL(name="CUSTOMER", description="Web store customer", is_system=True)
     db.add(role)
     await db.flush()
     owner = User(username="cust_a", email="a@example.com", full_name="A",

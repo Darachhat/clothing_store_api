@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.models import Branch, Warehouse
-from app.models import Brand, Category, Color, Product, ProductVariant, Size
-from app.models import Permission, Role, User
+from app.models import BRAND_MODEL, CATEGORY_MODEL, Color, Product, ProductVariant, Size
+from app.models import PERMISSION_MODEL, ROLE_MODEL, User
 from app.repositories.inventory_repository import InventoryStockRepository
 from app.services.inventory_service import INVENTORY_SERVICE
 from app.services.sale_service import SALE_SERVICE
@@ -25,9 +25,9 @@ async def create_sale_test_infra(db: AsyncSession):
     db.add(warehouse)
     await db.flush()
 
-    category = Category(name="Sale Shirts", slug="sale-shirts")
+    category = CATEGORY_MODEL(name="Sale Shirts", slug="sale-shirts")
     db.add(category)
-    brand = Brand(name="SaleBrand", slug="salebrand")
+    brand = BRAND_MODEL(name="SaleBrand", slug="salebrand")
     db.add(brand)
     color = Color(name="Red", hex_code="#FF0000")
     db.add(color)
@@ -57,13 +57,13 @@ async def create_sale_test_infra(db: AsyncSession):
     db.add(variant)
 
     # Create role with permissions - assign in constructor to avoid lazy load in async
-    sale_perm = Permission(code="sale.create", name="Create Sale", module="sales")
-    sale_read_perm = Permission(code="sale.read", name="Read Sale", module="sales")
-    refund_perm = Permission(code="sale.refund", name="Refund Sale", module="sales")
+    sale_perm = PERMISSION_MODEL(code="sale.create", name="Create Sale", module="sales")
+    sale_read_perm = PERMISSION_MODEL(code="sale.read", name="Read Sale", module="sales")
+    refund_perm = PERMISSION_MODEL(code="sale.refund", name="Refund Sale", module="sales")
     db.add_all([sale_perm, sale_read_perm, refund_perm])
     await db.flush()
 
-    role = Role(
+    role = ROLE_MODEL(
         name="CASHIER_TEST",
         is_system=True,
         permissions=[sale_perm, sale_read_perm, refund_perm],

@@ -42,17 +42,17 @@ Generated from the FastAPI OpenAPI spec (`app.openapi()`). Interactive docs: `/d
 | POST | `/api/admin/v1/auth/refresh` | Refresh |  | RefreshRequest | TokenResponse |
 | GET | `/api/admin/v1/branches/` | List Branches | 🔒 |  | BranchOut[] |
 | GET | `/api/admin/v1/brands/` | List Brands | 🔒 |  | BrandOut[] |
-| POST | `/api/admin/v1/brands/` | Create Brand | 🔒 | BrandCreate | BrandOut |
-| GET | `/api/admin/v1/brands/{id}` | Get Brand | 🔒 |  | BrandOut |
-| PATCH | `/api/admin/v1/brands/{id}` | Update Brand | 🔒 | BrandUpdate | BrandOut |
-| PUT | `/api/admin/v1/brands/{id}` | Update Brand | 🔒 | BrandUpdate | BrandOut |
-| DELETE | `/api/admin/v1/brands/{id}` | Delete Brand | 🔒 |  |  |
+| POST | `/api/admin/v1/brands/` | Create BRAND_MODEL | 🔒 | BrandCreate | BrandOut |
+| GET | `/api/admin/v1/brands/{id}` | Get BRAND_MODEL | 🔒 |  | BrandOut |
+| PATCH | `/api/admin/v1/brands/{id}` | Update BRAND_MODEL | 🔒 | BrandUpdate | BrandOut |
+| PUT | `/api/admin/v1/brands/{id}` | Update BRAND_MODEL | 🔒 | BrandUpdate | BrandOut |
+| DELETE | `/api/admin/v1/brands/{id}` | Delete BRAND_MODEL | 🔒 |  |  |
 | GET | `/api/admin/v1/categories/` | List Categories | 🔒 |  | CategoryOut[] |
-| POST | `/api/admin/v1/categories/` | Create Category | 🔒 | CategoryCreate | CategoryOut |
-| GET | `/api/admin/v1/categories/{id}` | Get Category | 🔒 |  | CategoryOut |
-| PATCH | `/api/admin/v1/categories/{id}` | Update Category | 🔒 | CategoryUpdate | CategoryOut |
-| PUT | `/api/admin/v1/categories/{id}` | Update Category | 🔒 | CategoryUpdate | CategoryOut |
-| DELETE | `/api/admin/v1/categories/{id}` | Delete Category | 🔒 |  |  |
+| POST | `/api/admin/v1/categories/` | Create CATEGORY_MODEL | 🔒 | CategoryCreate | CategoryOut |
+| GET | `/api/admin/v1/categories/{id}` | Get CATEGORY_MODEL | 🔒 |  | CategoryOut |
+| PATCH | `/api/admin/v1/categories/{id}` | Update CATEGORY_MODEL | 🔒 | CategoryUpdate | CategoryOut |
+| PUT | `/api/admin/v1/categories/{id}` | Update CATEGORY_MODEL | 🔒 | CategoryUpdate | CategoryOut |
+| DELETE | `/api/admin/v1/categories/{id}` | Delete CATEGORY_MODEL | 🔒 |  |  |
 | GET | `/api/admin/v1/colors/` | List Colors | 🔒 |  | ColorOut[] |
 | POST | `/api/admin/v1/colors/` | Create Color | 🔒 | ColorCreate | ColorOut |
 | GET | `/api/admin/v1/colors/{id}` | Get Color | 🔒 |  | ColorOut |
@@ -68,9 +68,9 @@ Generated from the FastAPI OpenAPI spec (`app.openapi()`). Interactive docs: `/d
 | GET | `/api/admin/v1/expenses` | List Expenses | 🔒 |  | ExpenseOut[] |
 | POST | `/api/admin/v1/expenses` | Create Expense | 🔒 | ExpenseCreate | ExpenseOut |
 | GET | `/api/admin/v1/expenses/categories` | List Categories | 🔒 |  | ExpenseCategoryOut[] |
-| POST | `/api/admin/v1/expenses/categories` | Create Category | 🔒 | ExpenseCategoryCreate | ExpenseCategoryOut |
-| PUT | `/api/admin/v1/expenses/categories/{cat_id}` | Update Category | 🔒 | ExpenseCategoryUpdate | ExpenseCategoryOut |
-| PATCH | `/api/admin/v1/expenses/categories/{cat_id}` | Update Category | 🔒 | ExpenseCategoryUpdate | ExpenseCategoryOut |
+| POST | `/api/admin/v1/expenses/categories` | Create CATEGORY_MODEL | 🔒 | ExpenseCategoryCreate | ExpenseCategoryOut |
+| PUT | `/api/admin/v1/expenses/categories/{cat_id}` | Update CATEGORY_MODEL | 🔒 | ExpenseCategoryUpdate | ExpenseCategoryOut |
+| PATCH | `/api/admin/v1/expenses/categories/{cat_id}` | Update CATEGORY_MODEL | 🔒 | ExpenseCategoryUpdate | ExpenseCategoryOut |
 | GET | `/api/admin/v1/expenses/{expense_id}` | Get Expense | 🔒 |  | ExpenseOut |
 | PUT | `/api/admin/v1/expenses/{expense_id}` | Update Expense | 🔒 | ExpenseUpdate | ExpenseOut |
 | PATCH | `/api/admin/v1/expenses/{expense_id}` | Update Expense | 🔒 | ExpenseUpdate | ExpenseOut |
@@ -128,10 +128,10 @@ Generated from the FastAPI OpenAPI spec (`app.openapi()`). Interactive docs: `/d
 | GET | `/api/admin/v1/returns/` | List Returns | 🔒 |  | ReturnOut[] |
 | POST | `/api/admin/v1/returns/` | Create Return | 🔒 | ReturnCreate | ReturnOut |
 | GET | `/api/admin/v1/roles` | List Roles | 🔒 |  | RoleOut[] |
-| POST | `/api/admin/v1/roles` | Create Role | 🔒 | RoleCreate | RoleOut |
+| POST | `/api/admin/v1/roles` | Create ROLE_MODEL | 🔒 | RoleCreate | RoleOut |
 | GET | `/api/admin/v1/roles/permissions` | List Permissions | 🔒 |  | PermissionOut[] |
-| PUT | `/api/admin/v1/roles/{role_id}` | Update Role | 🔒 | RoleUpdate | RoleOut |
-| PATCH | `/api/admin/v1/roles/{role_id}` | Update Role | 🔒 | RoleUpdate | RoleOut |
+| PUT | `/api/admin/v1/roles/{role_id}` | Update ROLE_MODEL | 🔒 | RoleUpdate | RoleOut |
+| PATCH | `/api/admin/v1/roles/{role_id}` | Update ROLE_MODEL | 🔒 | RoleUpdate | RoleOut |
 | GET | `/api/admin/v1/sales/` | List Sales | 🔒 |  | SaleOut[] |
 | POST | `/api/admin/v1/sales/` | Create Sale | 🔒 | SaleCreate | SaleOut |
 | GET | `/api/admin/v1/sales/{id}` | Get Sale | 🔒 |  | SaleOut |
@@ -170,17 +170,17 @@ Generated from the FastAPI OpenAPI spec (`app.openapi()`). Interactive docs: `/d
 | POST | `/api/cashier/v1/auth/refresh` | Refresh |  | RefreshRequest | TokenResponse |
 | GET | `/api/cashier/v1/branches/` | List Branches | 🔒 |  | BranchOut[] |
 | GET | `/api/cashier/v1/brands/` | List Brands | 🔒 |  | BrandOut[] |
-| POST | `/api/cashier/v1/brands/` | Create Brand | 🔒 | BrandCreate | BrandOut |
-| GET | `/api/cashier/v1/brands/{id}` | Get Brand | 🔒 |  | BrandOut |
-| PATCH | `/api/cashier/v1/brands/{id}` | Update Brand | 🔒 | BrandUpdate | BrandOut |
-| PUT | `/api/cashier/v1/brands/{id}` | Update Brand | 🔒 | BrandUpdate | BrandOut |
-| DELETE | `/api/cashier/v1/brands/{id}` | Delete Brand | 🔒 |  |  |
+| POST | `/api/cashier/v1/brands/` | Create BRAND_MODEL | 🔒 | BrandCreate | BrandOut |
+| GET | `/api/cashier/v1/brands/{id}` | Get BRAND_MODEL | 🔒 |  | BrandOut |
+| PATCH | `/api/cashier/v1/brands/{id}` | Update BRAND_MODEL | 🔒 | BrandUpdate | BrandOut |
+| PUT | `/api/cashier/v1/brands/{id}` | Update BRAND_MODEL | 🔒 | BrandUpdate | BrandOut |
+| DELETE | `/api/cashier/v1/brands/{id}` | Delete BRAND_MODEL | 🔒 |  |  |
 | GET | `/api/cashier/v1/categories/` | List Categories | 🔒 |  | CategoryOut[] |
-| POST | `/api/cashier/v1/categories/` | Create Category | 🔒 | CategoryCreate | CategoryOut |
-| GET | `/api/cashier/v1/categories/{id}` | Get Category | 🔒 |  | CategoryOut |
-| PATCH | `/api/cashier/v1/categories/{id}` | Update Category | 🔒 | CategoryUpdate | CategoryOut |
-| PUT | `/api/cashier/v1/categories/{id}` | Update Category | 🔒 | CategoryUpdate | CategoryOut |
-| DELETE | `/api/cashier/v1/categories/{id}` | Delete Category | 🔒 |  |  |
+| POST | `/api/cashier/v1/categories/` | Create CATEGORY_MODEL | 🔒 | CategoryCreate | CategoryOut |
+| GET | `/api/cashier/v1/categories/{id}` | Get CATEGORY_MODEL | 🔒 |  | CategoryOut |
+| PATCH | `/api/cashier/v1/categories/{id}` | Update CATEGORY_MODEL | 🔒 | CategoryUpdate | CategoryOut |
+| PUT | `/api/cashier/v1/categories/{id}` | Update CATEGORY_MODEL | 🔒 | CategoryUpdate | CategoryOut |
+| DELETE | `/api/cashier/v1/categories/{id}` | Delete CATEGORY_MODEL | 🔒 |  |  |
 | GET | `/api/cashier/v1/colors/` | List Colors | 🔒 |  | ColorOut[] |
 | POST | `/api/cashier/v1/colors/` | Create Color | 🔒 | ColorCreate | ColorOut |
 | GET | `/api/cashier/v1/colors/{id}` | Get Color | 🔒 |  | ColorOut |
@@ -295,22 +295,22 @@ Generated from the FastAPI OpenAPI spec (`app.openapi()`). Interactive docs: `/d
 | Method | Path | Summary | Auth | Request | Response |
 | --- | --- | --- | --- | --- | --- |
 | GET | `/api/v1/brands/` | List Brands | 🔒 |  | BrandOut[] |
-| POST | `/api/v1/brands/` | Create Brand | 🔒 | BrandCreate | BrandOut |
-| GET | `/api/v1/brands/{id}` | Get Brand | 🔒 |  | BrandOut |
-| PATCH | `/api/v1/brands/{id}` | Update Brand | 🔒 | BrandUpdate | BrandOut |
-| PUT | `/api/v1/brands/{id}` | Update Brand | 🔒 | BrandUpdate | BrandOut |
-| DELETE | `/api/v1/brands/{id}` | Delete Brand | 🔒 |  |  |
+| POST | `/api/v1/brands/` | Create BRAND_MODEL | 🔒 | BrandCreate | BrandOut |
+| GET | `/api/v1/brands/{id}` | Get BRAND_MODEL | 🔒 |  | BrandOut |
+| PATCH | `/api/v1/brands/{id}` | Update BRAND_MODEL | 🔒 | BrandUpdate | BrandOut |
+| PUT | `/api/v1/brands/{id}` | Update BRAND_MODEL | 🔒 | BrandUpdate | BrandOut |
+| DELETE | `/api/v1/brands/{id}` | Delete BRAND_MODEL | 🔒 |  |  |
 
 ## `api/v1/categories`
 
 | Method | Path | Summary | Auth | Request | Response |
 | --- | --- | --- | --- | --- | --- |
 | GET | `/api/v1/categories/` | List Categories | 🔒 |  | CategoryOut[] |
-| POST | `/api/v1/categories/` | Create Category | 🔒 | CategoryCreate | CategoryOut |
-| GET | `/api/v1/categories/{id}` | Get Category | 🔒 |  | CategoryOut |
-| PATCH | `/api/v1/categories/{id}` | Update Category | 🔒 | CategoryUpdate | CategoryOut |
-| PUT | `/api/v1/categories/{id}` | Update Category | 🔒 | CategoryUpdate | CategoryOut |
-| DELETE | `/api/v1/categories/{id}` | Delete Category | 🔒 |  |  |
+| POST | `/api/v1/categories/` | Create CATEGORY_MODEL | 🔒 | CategoryCreate | CategoryOut |
+| GET | `/api/v1/categories/{id}` | Get CATEGORY_MODEL | 🔒 |  | CategoryOut |
+| PATCH | `/api/v1/categories/{id}` | Update CATEGORY_MODEL | 🔒 | CategoryUpdate | CategoryOut |
+| PUT | `/api/v1/categories/{id}` | Update CATEGORY_MODEL | 🔒 | CategoryUpdate | CategoryOut |
+| DELETE | `/api/v1/categories/{id}` | Delete CATEGORY_MODEL | 🔒 |  |  |
 
 ## `api/v1/colors`
 
@@ -341,9 +341,9 @@ Generated from the FastAPI OpenAPI spec (`app.openapi()`). Interactive docs: `/d
 | GET | `/api/v1/expenses` | List Expenses | 🔒 |  | ExpenseOut[] |
 | POST | `/api/v1/expenses` | Create Expense | 🔒 | ExpenseCreate | ExpenseOut |
 | GET | `/api/v1/expenses/categories` | List Categories | 🔒 |  | ExpenseCategoryOut[] |
-| POST | `/api/v1/expenses/categories` | Create Category | 🔒 | ExpenseCategoryCreate | ExpenseCategoryOut |
-| PUT | `/api/v1/expenses/categories/{cat_id}` | Update Category | 🔒 | ExpenseCategoryUpdate | ExpenseCategoryOut |
-| PATCH | `/api/v1/expenses/categories/{cat_id}` | Update Category | 🔒 | ExpenseCategoryUpdate | ExpenseCategoryOut |
+| POST | `/api/v1/expenses/categories` | Create CATEGORY_MODEL | 🔒 | ExpenseCategoryCreate | ExpenseCategoryOut |
+| PUT | `/api/v1/expenses/categories/{cat_id}` | Update CATEGORY_MODEL | 🔒 | ExpenseCategoryUpdate | ExpenseCategoryOut |
+| PATCH | `/api/v1/expenses/categories/{cat_id}` | Update CATEGORY_MODEL | 🔒 | ExpenseCategoryUpdate | ExpenseCategoryOut |
 | GET | `/api/v1/expenses/{expense_id}` | Get Expense | 🔒 |  | ExpenseOut |
 | PUT | `/api/v1/expenses/{expense_id}` | Update Expense | 🔒 | ExpenseUpdate | ExpenseOut |
 | PATCH | `/api/v1/expenses/{expense_id}` | Update Expense | 🔒 | ExpenseUpdate | ExpenseOut |
@@ -461,10 +461,10 @@ Generated from the FastAPI OpenAPI spec (`app.openapi()`). Interactive docs: `/d
 | Method | Path | Summary | Auth | Request | Response |
 | --- | --- | --- | --- | --- | --- |
 | GET | `/api/v1/roles` | List Roles | 🔒 |  | RoleOut[] |
-| POST | `/api/v1/roles` | Create Role | 🔒 | RoleCreate | RoleOut |
+| POST | `/api/v1/roles` | Create ROLE_MODEL | 🔒 | RoleCreate | RoleOut |
 | GET | `/api/v1/roles/permissions` | List Permissions | 🔒 |  | PermissionOut[] |
-| PUT | `/api/v1/roles/{role_id}` | Update Role | 🔒 | RoleUpdate | RoleOut |
-| PATCH | `/api/v1/roles/{role_id}` | Update Role | 🔒 | RoleUpdate | RoleOut |
+| PUT | `/api/v1/roles/{role_id}` | Update ROLE_MODEL | 🔒 | RoleUpdate | RoleOut |
+| PATCH | `/api/v1/roles/{role_id}` | Update ROLE_MODEL | 🔒 | RoleUpdate | RoleOut |
 
 ## `api/v1/sales`
 

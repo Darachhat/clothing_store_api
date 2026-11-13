@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.models import Branch, Warehouse
-from app.models import Brand, Category, Color, Product, ProductVariant, Size
-from app.models import Role, User
+from app.models import BRAND_MODEL, CATEGORY_MODEL, Color, Product, ProductVariant, Size
+from app.models import ROLE_MODEL, User
 from app.repositories.inventory_repository import InventoryStockRepository
 from app.services.inventory_service import INVENTORY_SERVICE
 
@@ -23,9 +23,9 @@ async def create_test_infra(db: AsyncSession):
     db.add(warehouse)
     await db.flush()
 
-    category = Category(name="T-Shirts", slug="t-shirts")
+    category = CATEGORY_MODEL(name="T-Shirts", slug="t-shirts")
     db.add(category)
-    brand = Brand(name="TestBrand", slug="testbrand")
+    brand = BRAND_MODEL(name="TestBrand", slug="testbrand")
     db.add(brand)
     color = Color(name="Black", hex_code="#000000")
     db.add(color)
@@ -54,7 +54,7 @@ async def create_test_infra(db: AsyncSession):
     )
     db.add(variant)
 
-    role = Role(name="ADMIN_TEST", is_system=True)
+    role = ROLE_MODEL(name="ADMIN_TEST", is_system=True)
     db.add(role)
     await db.flush()
 

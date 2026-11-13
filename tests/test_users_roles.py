@@ -1,4 +1,4 @@
-"""User and Role Administration unit tests."""
+"""User and ROLE_MODEL Administration unit tests."""
 from __future__ import annotations
 
 import pytest
@@ -6,15 +6,15 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, hash_password
-from app.models import Permission, Role, User
+from app.models import PERMISSION_MODEL, ROLE_MODEL, User
 
 
 async def create_admin_user(db: AsyncSession) -> User:
-    perm = Permission(code="user.manage", name="Manage Users", module="users")
+    perm = PERMISSION_MODEL(code="user.manage", name="Manage Users", module="users")
     db.add(perm)
     await db.flush()
 
-    role = Role(name="ADMIN", is_system=True, permissions=[perm])
+    role = ROLE_MODEL(name="ADMIN", is_system=True, permissions=[perm])
     db.add(role)
     await db.flush()
 

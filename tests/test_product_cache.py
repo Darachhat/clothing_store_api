@@ -18,8 +18,8 @@ from app.core.redis import get_redis_client, redis_get, redis_set
 from app.core.security import create_access_token, hash_password
 from app.models import Branch, Warehouse
 from app.models import InventoryStock
-from app.models import Brand, Category, Color, Product, ProductVariant, Size, Supplier
-from app.models import Permission, Role, User
+from app.models import BRAND_MODEL, CATEGORY_MODEL, Color, Product, ProductVariant, Size, Supplier
+from app.models import PERMISSION_MODEL, ROLE_MODEL, User
 from app.repositories.product_repository import ProductRepository
 from app.services.product_cache_service import ProductCacheService
 
@@ -40,15 +40,15 @@ async def clear_test_redis():
 
 async def setup_test_catalog(db: AsyncSession) -> dict:
     """Helper to populate mock categories, brands, products and admin user."""
-    # 1. Permission and Role
-    perm = Permission(code="product.read", name="Read Products", module="products")
-    perm_create = Permission(code="product.create", name="Create Products", module="products")
-    perm_update = Permission(code="product.update", name="Update Products", module="products")
-    perm_delete = Permission(code="product.delete", name="Delete Products", module="products")
+    # 1. PERMISSION_MODEL and ROLE_MODEL
+    perm = PERMISSION_MODEL(code="product.read", name="Read Products", module="products")
+    perm_create = PERMISSION_MODEL(code="product.create", name="Create Products", module="products")
+    perm_update = PERMISSION_MODEL(code="product.update", name="Update Products", module="products")
+    perm_delete = PERMISSION_MODEL(code="product.delete", name="Delete Products", module="products")
     db.add_all([perm, perm_create, perm_update, perm_delete])
     await db.flush()
 
-    role = Role(name="ADMIN", description="Admin role", is_system=True)
+    role = ROLE_MODEL(name="ADMIN", description="Admin role", is_system=True)
     role.permissions = [perm, perm_create, perm_update, perm_delete]
     db.add(role)
     await db.flush()
@@ -73,15 +73,15 @@ async def setup_test_catalog(db: AsyncSession) -> dict:
     await db.flush()
 
     # 3. Categories
-    cat_tshirts = Category(name="T-Shirts", slug="t-shirts", status="ACTIVE")
-    cat_hoodies = Category(name="Hoodies", slug="hoodies", status="ACTIVE")
-    cat_jeans = Category(name="Jeans", slug="jeans", status="ACTIVE")
+    cat_tshirts = CATEGORY_MODEL(name="T-Shirts", slug="t-shirts", status="ACTIVE")
+    cat_hoodies = CATEGORY_MODEL(name="Hoodies", slug="hoodies", status="ACTIVE")
+    cat_jeans = CATEGORY_MODEL(name="Jeans", slug="jeans", status="ACTIVE")
     db.add_all([cat_tshirts, cat_hoodies, cat_jeans])
     await db.flush()
 
     # 4. Brands
-    brand_fx = Brand(name="FashionX", slug="fashionx", status="ACTIVE")
-    brand_sm = Brand(name="StreetMode", slug="streetmode", status="ACTIVE")
+    brand_fx = BRAND_MODEL(name="FashionX", slug="fashionx", status="ACTIVE")
+    brand_sm = BRAND_MODEL(name="StreetMode", slug="streetmode", status="ACTIVE")
     db.add_all([brand_fx, brand_sm])
     await db.flush()
 
@@ -213,24 +213,24 @@ async def test_category_and_brand_filters_generate_distinct_caches(
     data = await setup_test_catalog(db)
     headers = data["headers"]
 
-    # Category: t-shirts
+    # CATEGORY_MODEL: t-shirts
     resp_cat1 = await client.get("/api/v1/products/?category=t-shirts", headers=headers)
     assert resp_cat1.status_code == 200
     assert resp_cat1.headers.get("X-Cache") == "MISS"
     assert resp_cat1.json()["pagination"]["total"] == 3
 
-    # Category: hoodies
+    # CATEGORY_MODEL: hoodies
     resp_cat2 = await client.get("/api/v1/products/?category=hoodies", headers=headers)
     assert resp_cat2.status_code == 200
     assert resp_cat2.headers.get("X-Cache") == "MISS"
     assert resp_cat2.json()["pagination"]["total"] == 2
 
-    # Brand: FashionX
+    # BRAND_MODEL: FashionX
     resp_brand1 = await client.get("/api/v1/products/?brand=FashionX", headers=headers)
     assert resp_brand1.status_code == 200
     assert resp_brand1.headers.get("X-Cache") == "MISS"
 
-    # Brand: StreetMode
+    # BRAND_MODEL: StreetMode
     resp_brand2 = await client.get("/api/v1/products/?brand=StreetMode", headers=headers)
     assert resp_brand2.status_code == 200
     assert resp_brand2.headers.get("X-Cache") == "MISS"
@@ -336,7 +336,7 @@ async def test_product_creation_and_deletion_pagination_updates(
 
     # 2. Create product via API
     create_payload = {
-        "name": "Brand New Denim Jacket",
+        "name": "BRAND_MODEL New Denim Jacket",
         "category_id": str(data["cat_tshirts"].id),
         "brand_id": str(data["brand_fx"].id),
         "status": "ACTIVE",

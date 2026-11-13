@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.models import Branch, Warehouse
-from app.models import Role, User
+from app.models import ROLE_MODEL, User
 
 
 async def create_test_user(db: AsyncSession) -> User:
@@ -19,7 +19,7 @@ async def create_test_user(db: AsyncSession) -> User:
     db.add(warehouse)
     await db.flush()
 
-    role = Role(name="ADMIN", is_system=True)
+    role = ROLE_MODEL(name="ADMIN", is_system=True)
     db.add(role)
     await db.flush()
 

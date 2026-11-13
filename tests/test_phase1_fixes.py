@@ -12,8 +12,8 @@ from app.core.security import hash_password
 from app.models import Branch, Warehouse
 from app.models import Customer
 from app.models import ExpenseCategory
-from app.models import Brand, Category, Color, Product, ProductVariant, Size, Supplier
-from app.models import Permission, Role, User
+from app.models import BRAND_MODEL, CATEGORY_MODEL, Color, Product, ProductVariant, Size, Supplier
+from app.models import PERMISSION_MODEL, ROLE_MODEL, User
 from app.schemas.expense_schema import EXPENSE_CREATE_SCHEMA
 from app.schemas.inventory_schema import STOCK_ADJUSTMENT_CREATE_SCHEMA
 from app.schemas.promotion_schema import PROMOTION_CREATE_SCHEMA
@@ -30,8 +30,8 @@ async def setup_admin_env(db: AsyncSession):
     db.add(warehouse)
     await db.flush()
 
-    category = Category(name="Phase1 Shirts", slug="phase1-shirts")
-    brand = Brand(name="Phase1Brand", slug="phase1brand")
+    category = CATEGORY_MODEL(name="Phase1 Shirts", slug="phase1-shirts")
+    brand = BRAND_MODEL(name="Phase1Brand", slug="phase1brand")
     color = Color(name="Navy", hex_code="#000080")
     size = Size(name="XL", type="LETTER")
     supplier = Supplier(code="SUP-PH1", name="Phase1 Supplier", phone="012345678")
@@ -85,14 +85,14 @@ async def setup_admin_env(db: AsyncSession):
         "settings.manage",
     ]
     perms = [
-        Permission(code=code, name=code, module=code.split(".")[0])
+        PERMISSION_MODEL(code=code, name=code, module=code.split(".")[0])
         for code in perm_codes
     ]
     db.add_all(perms)
     await db.flush()
 
-    admin_role = Role(name="ADMIN", is_system=True, permissions=perms)
-    customer_role = Role(name="CUSTOMER", is_system=True)
+    admin_role = ROLE_MODEL(name="ADMIN", is_system=True, permissions=perms)
+    customer_role = ROLE_MODEL(name="CUSTOMER", is_system=True)
     db.add_all([admin_role, customer_role])
     await db.flush()
 

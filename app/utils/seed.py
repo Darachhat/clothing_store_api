@@ -21,8 +21,8 @@ from app.models import Branch, Warehouse
 from app.models import Customer, LoyaltyAccount
 from app.models import InventoryStock
 from app.models import ExpenseCategory
-from app.models import Brand, Category, Color, Product, ProductVariant, Size, Supplier
-from app.models import Permission, Role, User
+from app.models import BRAND_MODEL, CATEGORY_MODEL, Color, Product, ProductVariant, Size, Supplier
+from app.models import PERMISSION_MODEL, ROLE_MODEL, User
 
 if settings.ENVIRONMENT == "production":
     logger.error("⛔ Seed script cannot be run in production!")
@@ -583,16 +583,16 @@ async def seed() -> None:
         logger.info(f"✅ Branch ({branch.name}) & Warehouse ({warehouse.name}) ready")
 
         # ── 2. Permissions & Roles ────────────────────────────────────────
-        perm_map: dict[str, Permission] = {}
+        perm_map: dict[str, PERMISSION_MODEL] = {}
         for code, name, module in PERMISSIONS:
-            p, _ = await get_or_create(db, Permission, {"code": code}, {"name": name, "module": module})
+            p, _ = await get_or_create(db, PERMISSION_MODEL, {"code": code}, {"name": name, "module": module})
             perm_map[code] = p
 
-        role_map: dict[str, Role] = {}
+        role_map: dict[str, ROLE_MODEL] = {}
         for role_name, perm_codes in ROLES.items():
             role, _ = await get_or_create(
                 db,
-                Role,
+                ROLE_MODEL,
                 {"name": role_name},
                 {"is_system": True, "description": f"System {role_name} role"},
             )
@@ -654,21 +654,21 @@ async def seed() -> None:
         logger.info("✅ Seed user credentials verified (admin / manager / cashier)")
 
         # ── 4. Categories ─────────────────────────────────────────────────
-        cat_map: dict[str, Category] = {}
+        cat_map: dict[str, CATEGORY_MODEL] = {}
         for cat_name, cat_desc in CATEGORIES:
             slug = slugify(cat_name)
             cat, _ = await get_or_create(
-                db, Category, {"name": cat_name}, {"slug": slug, "description": cat_desc, "status": "ACTIVE"}
+                db, CATEGORY_MODEL, {"name": cat_name}, {"slug": slug, "description": cat_desc, "status": "ACTIVE"}
             )
             cat_map[cat_name] = cat
         logger.info(f"✅ {len(cat_map)} Categories ready")
 
         # ── 5. Brands ────────────────────────────────────────────────────
-        brand_map: dict[str, Brand] = {}
+        brand_map: dict[str, BRAND_MODEL] = {}
         for brand_name in BRANDS:
             slug = slugify(brand_name)
             brand, _ = await get_or_create(
-                db, Brand, {"name": brand_name}, {"slug": slug, "status": "ACTIVE"}
+                db, BRAND_MODEL, {"name": brand_name}, {"slug": slug, "status": "ACTIVE"}
             )
             brand_map[brand_name] = brand
         logger.info(f"✅ {len(brand_map)} Brands ready")

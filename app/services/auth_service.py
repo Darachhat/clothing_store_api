@@ -356,11 +356,11 @@ class AUTH_SERVICE:
         user = await self.user_repo.get_by_telegram_id(verified["telegram_id"])
         if not user:
             if auto_create_customer:
-                from app.models import Role
-                role_res = await self.db.execute(select(Role).where(Role.name == "CUSTOMER"))
+                from app.models import ROLE_MODEL
+                role_res = await self.db.execute(select(ROLE_MODEL).where(ROLE_MODEL.name == "CUSTOMER"))
                 customer_role = role_res.scalar_one_or_none()
                 if not customer_role:
-                    customer_role = Role(name="CUSTOMER", description="Web store customer", is_system=True)
+                    customer_role = ROLE_MODEL(name="CUSTOMER", description="Web store customer", is_system=True)
                     self.db.add(customer_role)
                     await self.db.flush()
 
@@ -776,11 +776,11 @@ class AUTH_SERVICE:
 
                 matched_user = await self.user_repo.get_by_phone_number(normalized_phone) if normalized_phone else None
                 if not matched_user and auto_create_customer and normalized_phone:
-                    from app.models import Role
-                    role_res = await self.db.execute(select(Role).where(Role.name == "CUSTOMER"))
+                    from app.models import ROLE_MODEL
+                    role_res = await self.db.execute(select(ROLE_MODEL).where(ROLE_MODEL.name == "CUSTOMER"))
                     customer_role = role_res.scalar_one_or_none()
                     if not customer_role:
-                        customer_role = Role(name="CUSTOMER", description="Web store customer", is_system=True)
+                        customer_role = ROLE_MODEL(name="CUSTOMER", description="Web store customer", is_system=True)
                         self.db.add(customer_role)
                         await self.db.flush()
 

@@ -5,13 +5,13 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Brand, Category, Product
+from app.models import BRAND_MODEL, CATEGORY_MODEL, Product
 
 
 @pytest.mark.asyncio
 async def test_public_catalog_lists_active_products(client: AsyncClient, db: AsyncSession) -> None:
-    category = Category(name="Store Tees", slug="store-tees")
-    brand = Brand(name="StoreBrand", slug="storebrand")
+    category = CATEGORY_MODEL(name="Store Tees", slug="store-tees")
+    brand = BRAND_MODEL(name="StoreBrand", slug="storebrand")
     db.add_all([category, brand])
     await db.flush()
     db.add(Product(code="STORE-001", name="Store Tee", slug="store-tee",

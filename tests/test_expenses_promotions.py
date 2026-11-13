@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.security import hash_password
 from app.models import Branch
 from app.models import ExpenseCategory, Promotion
-from app.models import Role, User
+from app.models import ROLE_MODEL, User
 from app.schemas.expense_schema import EXPENSE_CREATE_SCHEMA
 from app.services.misc_service import EXPENSE_SERVICE, PROMOTION_SERVICE
 
@@ -21,7 +21,7 @@ async def test_expense_lifecycle(db: AsyncSession):
     db.add(branch)
     category = ExpenseCategory(code="RENT", name="Office Rent")
     db.add(category)
-    role = Role(name="MANAGER", is_system=True)
+    role = ROLE_MODEL(name="MANAGER", is_system=True)
     db.add(role)
     await db.flush()
 

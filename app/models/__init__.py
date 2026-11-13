@@ -38,6 +38,8 @@ from app.models.base_data_schema_model import (  # noqa: F401
     LABEL_TEMPLATE_MODEL,
     LANGUAGE_MODEL,
     PERMISSION_MODEL,
+    PRODUCT_ATTRIBUTE_MODEL,
+    PRODUCT_ATTRIBUTE_VALUE_MODEL,
     ROLE_MODEL,
     SIZE_MODEL,
     STATUS_MODEL,
@@ -61,6 +63,8 @@ from app.models.data_schema_model import (  # noqa: F401
     PAYMENT_TRANSACTION_MODEL,
     POS_SHIFT_MODEL,
     POS_TERMINAL_MODEL,
+    PRODUCT_ATTRIBUTE_ASSIGNMENT_MODEL,
+    PRODUCT_IMAGE_MODEL,
     PRODUCT_MODEL,
     PRODUCT_VARIANT_MODEL,
     PROMOTION_MODEL,
@@ -89,16 +93,13 @@ from app.models.public_schema_model import (  # noqa: F401
     AlembicVersion,
 )
 
-# Backward-compatible model aliases
-Role                = ROLE_MODEL
-Permission          = PERMISSION_MODEL
-Category            = CATEGORY_MODEL
-Brand               = BRAND_MODEL
 Color               = COLOR_MODEL
 Size                = SIZE_MODEL
 ExpenseCategory     = EXPENSE_CATEGORY_MODEL
 LabelTemplate       = LABEL_TEMPLATE_MODEL
 SystemSetting       = SYSTEM_SETTING_MODEL
+ProductAttribute    = PRODUCT_ATTRIBUTE_MODEL
+ProductAttributeValue = PRODUCT_ATTRIBUTE_VALUE_MODEL
 
 User                = USER_MODEL
 RefreshToken        = REFRESH_TOKEN_MODEL
@@ -109,6 +110,8 @@ PosShift            = POS_SHIFT_MODEL
 Supplier            = SUPPLIER_MODEL
 Product             = PRODUCT_MODEL
 ProductVariant      = PRODUCT_VARIANT_MODEL
+ProductImage        = PRODUCT_IMAGE_MODEL
+ProductAttributeAssignment = PRODUCT_ATTRIBUTE_ASSIGNMENT_MODEL
 CatalogVersion      = CATALOG_VERSION_MODEL
 InventoryStock      = INVENTORY_STOCK_MODEL
 InventoryMovement   = INVENTORY_MOVEMENT_MODEL
@@ -137,10 +140,10 @@ PhoneVerification   = PHONE_VERIFICATION_MODEL
 
 # Declarative class registry bindings for string references
 for _alias, _model in [
-    ("Role", ROLE_MODEL),
-    ("Permission", PERMISSION_MODEL),
-    ("Category", CATEGORY_MODEL),
-    ("Brand", BRAND_MODEL),
+    ("ROLE_MODEL", ROLE_MODEL),
+    ("PERMISSION_MODEL", PERMISSION_MODEL),
+    ("CATEGORY_MODEL", CATEGORY_MODEL),
+    ("BRAND_MODEL", BRAND_MODEL),
     ("Color", COLOR_MODEL),
     ("Size", SIZE_MODEL),
     ("ExpenseCategory", EXPENSE_CATEGORY_MODEL),
@@ -152,6 +155,14 @@ for _alias, _model in [
     ("Supplier", SUPPLIER_MODEL),
     ("Product", PRODUCT_MODEL),
     ("ProductVariant", PRODUCT_VARIANT_MODEL),
+    ("ProductImage", PRODUCT_IMAGE_MODEL),
+    ("ProductAttribute", PRODUCT_ATTRIBUTE_MODEL),
+    ("ProductAttributeValue", PRODUCT_ATTRIBUTE_VALUE_MODEL),
+    ("ProductAttributeAssignment", PRODUCT_ATTRIBUTE_ASSIGNMENT_MODEL),
+    ("PRODUCT_IMAGE_MODEL", PRODUCT_IMAGE_MODEL),
+    ("PRODUCT_ATTRIBUTE_MODEL", PRODUCT_ATTRIBUTE_MODEL),
+    ("PRODUCT_ATTRIBUTE_VALUE_MODEL", PRODUCT_ATTRIBUTE_VALUE_MODEL),
+    ("PRODUCT_ATTRIBUTE_ASSIGNMENT_MODEL", PRODUCT_ATTRIBUTE_ASSIGNMENT_MODEL),
     ("CatalogVersion", CATALOG_VERSION_MODEL),
     ("InventoryStock", INVENTORY_STOCK_MODEL),
     ("InventoryMovement", INVENTORY_MOVEMENT_MODEL),
@@ -202,14 +213,14 @@ __all__ = [
     "AUTH_TYPE_MODEL",
     "LANGUAGE_MODEL",
     "CURRENCY_MODEL",
-    "Role",
     "ROLE_MODEL",
-    "Permission",
+    "ROLE_MODEL",
+    "PERMISSION_MODEL",
     "PERMISSION_MODEL",
     "role_permissions",
-    "Category",
     "CATEGORY_MODEL",
-    "Brand",
+    "CATEGORY_MODEL",
+    "BRAND_MODEL",
     "BRAND_MODEL",
     "Color",
     "COLOR_MODEL",

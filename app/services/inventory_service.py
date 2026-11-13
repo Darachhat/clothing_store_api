@@ -223,8 +223,11 @@ class INVENTORY_SERVICE:
         """Adjust inventory stock using structured STOCK_ADJUSTMENT_CREATE_SCHEMA."""
         delta = payload.quantity_delta
         if delta is None and payload.new_quantity is not None:
-            current_stock = await self.stock_repo.get_stock(payload.variant_id, payload.warehouse_id)
-            current_qty = current_stock.quantity if current_stock else 0
+            # Lock the row first so the delta is computed against the value that will be updated.
+            current_stock = await self.stock_repo.get_or_create_stock(
+                payload.variant_id, payload.warehouse_id, lock=True
+            )
+            current_qty = current_stock.quantity
             delta = payload.new_quantity - current_qty
 
         return await self.adjust_stock(

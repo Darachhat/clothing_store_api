@@ -59,7 +59,7 @@ class CacheService:
             if s_clean:
                 normalized["search"] = s_clean.lower()
 
-        # 3. Category (id or slug/name)
+        # 3. CATEGORY_MODEL (id or slug/name)
         cat_id = params.get("category_id")
         if cat_id:
             normalized["category_id"] = str(cat_id).strip().lower()
@@ -70,7 +70,7 @@ class CacheService:
             if c_clean and c_clean.lower() != "all":
                 normalized["category"] = c_clean.lower()
 
-        # 4. Brand (id or slug/name)
+        # 4. BRAND_MODEL (id or slug/name)
         brand_id = params.get("brand_id")
         if brand_id:
             normalized["brand_id"] = str(brand_id).strip().lower()

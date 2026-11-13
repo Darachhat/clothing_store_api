@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
-from app.models import Brand, Category, Color, Product, ProductVariant, Size, Supplier
+from app.models import BRAND_MODEL, CATEGORY_MODEL, Color, Product, ProductVariant, Size, Supplier
 from app.repositories.base import BaseRepository
 from app.utils.codes import normalize_scanned_code
 
@@ -40,12 +40,21 @@ class ProductRepository(BaseRepository[Product]):
             .options(
                 selectinload(Product.variants).selectinload(ProductVariant.color),
                 selectinload(Product.variants).selectinload(ProductVariant.size),
+                selectinload(Product.images),
+                selectinload(Product.attribute_assignments),
                 selectinload(Product.category),
                 selectinload(Product.brand),
                 selectinload(Product.supplier),
             )
         )
-        return result.scalar_one_or_none()
+        p = result.scalar_one_or_none()
+        if p is not None:
+            v_list = getattr(p, "variants", []) or []
+            p.variant_count = len(v_list)
+            prices = [v.selling_price for v in v_list if getattr(v, "selling_price", None) is not None]
+            p.min_price = min(prices) if prices else None
+            p.max_price = max(prices) if prices else None
+        return p
 
     async def search(
         self,
@@ -111,8 +120,8 @@ class ProductRepository(BaseRepository[Product]):
                 need_category_join = True
                 conditions.append(
                     or_(
-                        Category.slug.ilike(cat_clean),
-                        Category.name.ilike(cat_clean),
+                        CATEGORY_MODEL.slug.ilike(cat_clean),
+                        CATEGORY_MODEL.name.ilike(cat_clean),
                     )
                 )
 
@@ -128,8 +137,8 @@ class ProductRepository(BaseRepository[Product]):
                 need_brand_join = True
                 conditions.append(
                     or_(
-                        Brand.slug.ilike(brand_clean),
-                        Brand.name.ilike(brand_clean),
+                        BRAND_MODEL.slug.ilike(brand_clean),
+                        BRAND_MODEL.name.ilike(brand_clean),
                     )
                 )
 
@@ -198,24 +207,30 @@ class ProductRepository(BaseRepository[Product]):
         offset = max(0, (page - 1) * page_size)
         stmt = stmt.offset(offset).limit(page_size)
 
-        if include_stock or include_variants:
-            var_options = [
-                selectinload(Product.variants).selectinload(ProductVariant.color),
-                selectinload(Product.variants).selectinload(ProductVariant.size),
-            ]
-            if include_stock:
-                var_options.append(
-                    selectinload(Product.variants).selectinload(ProductVariant.inventory_stocks)
-                )
-            stmt = stmt.options(*var_options)
+        var_options = [
+            selectinload(Product.variants).selectinload(ProductVariant.color),
+            selectinload(Product.variants).selectinload(ProductVariant.size),
+            selectinload(Product.images),
+            selectinload(Product.attribute_assignments),
+        ]
+        if include_stock:
+            var_options.append(
+                selectinload(Product.variants).selectinload(ProductVariant.inventory_stocks)
+            )
+        stmt = stmt.options(*var_options)
 
         result = await self.db.execute(stmt)
         products = list(result.scalars().all())
 
-        if include_stock:
-            for p in products:
+        for p in products:
+            v_list = getattr(p, "variants", []) or []
+            p.variant_count = len(v_list)
+            prices = [v.selling_price for v in v_list if getattr(v, "selling_price", None) is not None]
+            p.min_price = min(prices) if prices else None
+            p.max_price = max(prices) if prices else None
+            if include_stock:
                 stock_sum = 0
-                for v in getattr(p, "variants", []):
+                for v in v_list:
                     for st in getattr(v, "inventory_stocks", []):
                         if warehouse_id and st.warehouse_id != warehouse_id:
                             continue
@@ -359,9 +374,9 @@ class ProductVariantRepository(BaseRepository[ProductVariant]):
         return list(result.scalars().all())
 
 
-class CategoryRepository(BaseRepository[Category]):
+class CategoryRepository(BaseRepository[CATEGORY_MODEL]):
     def __init__(self, db) -> None:
-        super().__init__(Category, db)
+        super().__init__(CATEGORY_MODEL, db)
 
 
 class ColorRepository(BaseRepository[Color]):
@@ -374,9 +389,9 @@ class SizeRepository(BaseRepository[Size]):
         super().__init__(Size, db)
 
 
-class BrandRepository(BaseRepository[Brand]):
+class BrandRepository(BaseRepository[BRAND_MODEL]):
     def __init__(self, db) -> None:
-        super().__init__(Brand, db)
+        super().__init__(BRAND_MODEL, db)
 
 
 class SupplierRepository(BaseRepository[Supplier]):

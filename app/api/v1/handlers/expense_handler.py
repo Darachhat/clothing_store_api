@@ -1,4 +1,4 @@
-"""Expense and Expense Category API endpoints."""
+"""Expense and Expense CATEGORY_MODEL API endpoints."""
 from __future__ import annotations
 
 from datetime import date
@@ -47,7 +47,7 @@ async def create_category(
     repo = ExpenseCategoryRepository(db)
     existing = await repo.get_by_code(payload.code.upper().strip())
     if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Category code already exists")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="CATEGORY_MODEL code already exists")
     cat = await repo.create(
         name=payload.name.strip(),
         code=payload.code.upper().strip(),
@@ -69,7 +69,7 @@ async def update_category(
     repo = ExpenseCategoryRepository(db)
     cat = await repo.get_by_id(cat_id)
     if not cat:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CATEGORY_MODEL not found")
     update_data = payload.model_dump(exclude_unset=True)
     cat = await repo.update(cat, **update_data)
     await db.commit()
@@ -85,7 +85,7 @@ async def delete_category(
     repo = ExpenseCategoryRepository(db)
     cat = await repo.get_by_id(cat_id)
     if not cat:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CATEGORY_MODEL not found")
     if cat.is_system:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete system expense category")
     await repo.delete(cat)

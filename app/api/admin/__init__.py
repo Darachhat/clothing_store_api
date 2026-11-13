@@ -21,8 +21,9 @@ from app.api.v1.endpoints.expenses import router as expenses_router
 from app.api.v1.endpoints.inventory import router as inventory_router
 from app.api.v1.endpoints.inventory import transfers_router
 from app.api.v1.endpoints.labels import router as labels_router
-from app.api.v1.endpoints.products import public_variant_media_router, router as products_router
+from app.api.v1.endpoints.products import attribute_router, public_variant_media_router, router as products_router
 from app.api.v1.endpoints.products import variant_router
+from app.api.v1.endpoints.scanner import router as scanner_router
 from app.api.v1.endpoints.promotions import router as promotions_router
 from app.api.v1.endpoints.purchases import router as purchases_router
 from app.api.v1.endpoints.reports import router as reports_router
@@ -46,12 +47,14 @@ admin_router.include_router(auth_router)
 admin_router.include_router(translation_router)
 admin_router.include_router(public_brand_router)
 admin_router.include_router(public_variant_media_router)
+admin_router.include_router(scanner_router)
 
 # ── Protected: all other endpoints require admin or manager role ───────────
 _protected = APIRouter(dependencies=[Depends(require_admin_or_manager)])
 
 _protected.include_router(products_router)
 _protected.include_router(variant_router)
+_protected.include_router(attribute_router)
 _protected.include_router(categories_router)
 _protected.include_router(colors_router)
 _protected.include_router(sizes_router)
