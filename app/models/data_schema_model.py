@@ -355,6 +355,26 @@ class PRODUCT_ATTRIBUTE_ASSIGNMENT_MODEL(BASE_MODEL):
     attribute                   : Mapped[PRODUCT_ATTRIBUTE_MODEL]   = relationship("PRODUCT_ATTRIBUTE_MODEL", lazy="selectin")
     attribute_value             : Mapped[PRODUCT_ATTRIBUTE_VALUE_MODEL] = relationship("PRODUCT_ATTRIBUTE_VALUE_MODEL", lazy="selectin")
 
+    @property
+    def attribute_name(self) -> str | None:
+        attr = self.__dict__.get("attribute")
+        return getattr(attr, "name", None) if attr is not None else None
+
+    @property
+    def attribute_display_name(self) -> str | None:
+        attr = self.__dict__.get("attribute")
+        return getattr(attr, "display_name", None) or getattr(attr, "name", None) if attr is not None else None
+
+    @property
+    def value(self) -> str | None:
+        val = self.__dict__.get("attribute_value")
+        return getattr(val, "value", None) if val is not None else None
+
+    @property
+    def display_value(self) -> str | None:
+        val = self.__dict__.get("attribute_value")
+        return getattr(val, "display_value", None) or getattr(val, "value", None) if val is not None else None
+
 
 
 # ── PRODUCT_VARIANT_MODEL ─────────────────────────────────────────────────────
@@ -1003,6 +1023,14 @@ class AUDIT_LOG_MODEL(BASE_MODEL):
     ip_address                  : Mapped[Optional[str]]             = mapped_column(String(45), nullable=True)
     user_agent                  : Mapped[Optional[str]]             = mapped_column(String(500), nullable=True)
     status_code                 : Mapped[str]                       = mapped_column(String(50), default="ACTIVE", nullable=False)
+
+    @property
+    def old_value(self) -> Optional[dict]:
+        return self.old_data
+
+    @property
+    def new_value(self) -> Optional[dict]:
+        return self.new_data
 
 
 # ── NOTIFICATION_SETTING_MODEL ────────────────────────────────────────────────

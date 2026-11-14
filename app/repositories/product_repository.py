@@ -6,7 +6,16 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import selectinload
 
-from app.models import BRAND_MODEL, CATEGORY_MODEL, Color, Product, ProductVariant, Size, Supplier
+from app.models import (
+    BRAND_MODEL,
+    CATEGORY_MODEL,
+    Color,
+    Product,
+    ProductAttributeAssignment,
+    ProductVariant,
+    Size,
+    Supplier,
+)
 from app.repositories.base import BaseRepository
 from app.utils.codes import normalize_scanned_code
 
@@ -37,11 +46,13 @@ class ProductRepository(BaseRepository[Product]):
         result = await self.db.execute(
             select(Product)
             .where(Product.id == id)
+            .execution_options(populate_existing=True)
             .options(
                 selectinload(Product.variants).selectinload(ProductVariant.color),
                 selectinload(Product.variants).selectinload(ProductVariant.size),
                 selectinload(Product.images),
-                selectinload(Product.attribute_assignments),
+                selectinload(Product.attribute_assignments).selectinload(ProductAttributeAssignment.attribute),
+                selectinload(Product.attribute_assignments).selectinload(ProductAttributeAssignment.attribute_value),
                 selectinload(Product.category),
                 selectinload(Product.brand),
                 selectinload(Product.supplier),

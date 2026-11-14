@@ -360,6 +360,7 @@ async def test_kvc_permissions_stock_manager_readonly(client: AsyncClient, db: A
     assert sm_delete.status_code == 403
 
     # Unauthenticated request is rejected (401)
+    client.cookies.clear()
     unauth = await client.get("/api/admin/v1/products")
     assert unauth.status_code == 401
 

@@ -95,13 +95,13 @@ async def list_products(
     return data
 
 
-@router.post("", response_model=PRODUCT_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
-@router.post("/", response_model=PRODUCT_RESPONSE_SCHEMA, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PRODUCT_WITH_VARIANTS_SCHEMA, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/", response_model=PRODUCT_WITH_VARIANTS_SCHEMA, status_code=status.HTTP_201_CREATED)
 async def create_product(
     body           : PRODUCT_CREATE_SCHEMA
     , db           : AsyncSession = Depends(get_db)
     , current_user : User         = Depends(require_permission("product.create"))
-) -> PRODUCT_RESPONSE_SCHEMA:
+) -> PRODUCT_WITH_VARIANTS_SCHEMA:
     return await PRODUCT_SERVICE.create_product(db=db, body=body)
 
 
@@ -165,14 +165,14 @@ async def get_product(
     return await PRODUCT_SERVICE.get_product(db=db, product_id=id)
 
 
-@router.put("/{id}", response_model=PRODUCT_RESPONSE_SCHEMA)
-@router.patch("/{id}", response_model=PRODUCT_RESPONSE_SCHEMA)
+@router.put("/{id}", response_model=PRODUCT_WITH_VARIANTS_SCHEMA)
+@router.patch("/{id}", response_model=PRODUCT_WITH_VARIANTS_SCHEMA)
 async def update_product(
     id     : UUID
     , body : PRODUCT_UPDATE_SCHEMA
     , db   : AsyncSession = Depends(get_db)
     , _    : User         = Depends(require_permission("product.update"))
-) -> PRODUCT_RESPONSE_SCHEMA:
+) -> PRODUCT_WITH_VARIANTS_SCHEMA:
     return await PRODUCT_SERVICE.update_product(db=db, product_id=id, body=body)
 
 

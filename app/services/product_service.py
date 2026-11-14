@@ -612,9 +612,9 @@ class PRODUCT_SERVICE:
         await db.commit()
 
     @classmethod
-    async def bulk_archive_products(cls, db: AsyncSession, product_ids: List[UUID]) -> int:
+    async def bulk_archive_products(cls, db: AsyncSession, product_ids: List[UUID]) -> Dict[str, Any]:
         if not product_ids:
-            return 0
+            return {"archived_count": 0, "product_ids": []}
         stmt = (
             update(Product)
             .where(Product.id.in_(product_ids))
@@ -623,7 +623,7 @@ class PRODUCT_SERVICE:
         res = await db.execute(stmt)
         await cls.increment_catalog_version(db)
         await db.commit()
-        return int(res.rowcount or 0)
+        return {"archived_count": int(res.rowcount or 0), "product_ids": [str(pid) for pid in product_ids]}
 
     @classmethod
     async def list_variants(
@@ -1033,31 +1033,55 @@ class PRODUCT_SERVICE:
     ) -> List[ProductVariant]:
         repo = ProductVariantRepository(db)
         updated_list: List[ProductVariant] = []
-        for item in body.items:
-            variant = await repo.get_by_id(item.id)
-            if not variant or variant.product_id != product_id:
-                continue
-            fields: Dict[str, Any] = {}
-            if item.cost_price is not None:
-                fields["cost_price"] = item.cost_price
-            if item.selling_price is not None:
-                fields["selling_price"] = item.selling_price
-            if item.wholesale_price is not None:
-                fields["wholesale_price"] = item.wholesale_price
-            if item.status_code is not None:
-                fields["status_code"] = item.status_code.strip().upper()
-            if item.image_url is not None:
-                fields["image_url"] = item.image_url.strip() or None
-            if fields:
-                variant = await repo.update(variant, **fields)
-            updated_list.append(variant)
+        if body.items:
+            for item in body.items:
+                variant = await repo.get_by_id(item.id)
+                if not variant or variant.product_id != product_id:
+                    continue
+                fields: Dict[str, Any] = {}
+                if item.cost_price is not None:
+                    fields["cost_price"] = item.cost_price
+                if item.selling_price is not None:
+                    fields["selling_price"] = item.selling_price
+                if item.wholesale_price is not None:
+                    fields["wholesale_price"] = item.wholesale_price
+                if item.status_code is not None:
+                    fields["status_code"] = item.status_code.strip().upper()
+                if item.image_url is not None:
+                    fields["image_url"] = item.image_url.strip() or None
+                if fields:
+                    variant = await repo.update(variant, **fields)
+                updated_list.append(variant)
+        else:
+            all_variants = await repo.search(product_id=product_id, limit=500)
+            target_ids = set(body.variant_ids) if body.variant_ids else None
+            uniform_fields: Dict[str, Any] = {}
+            if body.cost_price is not None:
+                uniform_fields["cost_price"] = body.cost_price
+            if body.selling_price is not None:
+                uniform_fields["selling_price"] = body.selling_price
+            if body.wholesale_price is not None:
+                uniform_fields["wholesale_price"] = body.wholesale_price
+            if body.status_code is not None:
+                uniform_fields["status_code"] = body.status_code.strip().upper()
+            for variant in all_variants:
+                if target_ids is not None and variant.id not in target_ids:
+                    continue
+                if uniform_fields:
+                    variant = await repo.update(variant, **uniform_fields)
+                updated_list.append(variant)
         if updated_list:
             await cls.increment_catalog_version(db)
             await db.commit()
         return [await repo.get_by_id(v.id) or v for v in updated_list]
 
     @classmethod
-    async def regenerate_variant_codes(cls, db: AsyncSession, variant_id: UUID) -> ProductVariant:
+    async def regenerate_variant_codes(
+        cls,
+        db: AsyncSession,
+        variant_id: UUID,
+        user_id: Optional[UUID] = None,
+    ) -> ProductVariant:
         repo    = ProductVariantRepository(db)
         variant = await repo.get_by_id(variant_id)
         if not variant:
@@ -1065,16 +1089,15 @@ class PRODUCT_SERVICE:
         old_qr = variant.qr_reference
         old_bc = variant.barcode
         new_qr = await cls._generate_unique_qr_reference(db)
-        update_kwargs: Dict[str, Any] = {"qr_reference": new_qr}
-        if not variant.barcode:
-            prod_code = variant.product.code if variant.product else "PROD-00001"
-            b_seq = 1
-            while True:
-                candidate = generate_compact_barcode(prod_code, b_seq)
-                if await cls._find_existing_variant_by_code(db, candidate, exclude_variant_id=variant.id) is None:
-                    update_kwargs["barcode"] = candidate
-                    break
-                b_seq += 1
+        prod_code = variant.product.code if variant.product else "PROD-00001"
+        b_seq = 1
+        while True:
+            candidate = generate_compact_barcode(prod_code, b_seq)
+            if candidate != old_bc and await cls._find_existing_variant_by_code(db, candidate, exclude_variant_id=variant.id) is None:
+                new_bc = candidate
+                break
+            b_seq += 1
+        update_kwargs: Dict[str, Any] = {"qr_reference": new_qr, "barcode": new_bc}
         variant = await repo.update(variant, **update_kwargs)
         from app.services.audit_service import AUDIT_SERVICE
         await AUDIT_SERVICE.record(
@@ -1082,6 +1105,7 @@ class PRODUCT_SERVICE:
             action="VARIANT_CODES_REGENERATED",
             entity_type="product_variant",
             entity_id=variant.id,
+            user_id=user_id,
             old_data={"sku": variant.sku, "qr_reference": old_qr, "barcode": old_bc},
             new_data={"sku": variant.sku, "qr_reference": variant.qr_reference, "barcode": variant.barcode},
         )
@@ -1092,13 +1116,15 @@ class PRODUCT_SERVICE:
 
     # ── Configurable Product Attributes ───────────────────────────────────────
     @classmethod
-    async def list_product_attributes(cls, db: AsyncSession) -> List[ProductAttribute]:
-        res = await db.execute(
-            select(ProductAttribute)
-            .where(ProductAttribute.status_code == "ACTIVE")
-            .options(selectinload(ProductAttribute.values))
-            .order_by(ProductAttribute.sort_order, ProductAttribute.name)
-        )
+    async def list_product_attributes(
+        cls,
+        db: AsyncSession,
+        include_inactive: bool = False,
+    ) -> List[ProductAttribute]:
+        stmt = select(ProductAttribute).options(selectinload(ProductAttribute.values))
+        if not include_inactive:
+            stmt = stmt.where(ProductAttribute.status_code == "ACTIVE")
+        res = await db.execute(stmt.order_by(ProductAttribute.sort_order, ProductAttribute.name))
         return list(res.scalars().all())
 
     @classmethod

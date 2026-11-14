@@ -174,7 +174,7 @@ class PRODUCT_ATTRIBUTE_VALUE_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
 
 
 class PRODUCT_ATTRIBUTE_CREATE_SCHEMA(BaseModel):
-    code           : str
+    code           : Optional[str]                                       = None
     name           : str
     display_name   : Optional[str]                                       = None
     attribute_type : str                                                 = "SELECT"
@@ -205,11 +205,15 @@ class PRODUCT_ATTRIBUTE_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
 
 
 class PRODUCT_ATTRIBUTE_ASSIGNMENT_RESPONSE_SCHEMA(BASE_AUDIT_RESPONSE_SCHEMA):
-    product_id         : uuid.UUID
-    attribute_id       : uuid.UUID
-    attribute_value_id : uuid.UUID
-    attribute          : Optional[PRODUCT_ATTRIBUTE_RESPONSE_SCHEMA]       = None
-    attribute_value    : Optional[PRODUCT_ATTRIBUTE_VALUE_RESPONSE_SCHEMA] = None
+    product_id             : uuid.UUID
+    attribute_id           : uuid.UUID
+    attribute_value_id     : uuid.UUID
+    attribute_name         : Optional[str]                               = None
+    attribute_display_name : Optional[str]                               = None
+    value                  : Optional[str]                               = None
+    display_value          : Optional[str]                               = None
+    attribute              : Optional[PRODUCT_ATTRIBUTE_RESPONSE_SCHEMA]       = None
+    attribute_value        : Optional[PRODUCT_ATTRIBUTE_VALUE_RESPONSE_SCHEMA] = None
 
 
 class PRODUCT_IMAGE_CREATE_SCHEMA(BaseModel):
@@ -433,7 +437,12 @@ class PRODUCT_VARIANT_BULK_UPDATE_ITEM_SCHEMA(BaseModel):
 
 
 class PRODUCT_VARIANT_BULK_UPDATE_SCHEMA(BaseModel):
-    items : List[PRODUCT_VARIANT_BULK_UPDATE_ITEM_SCHEMA] = Field(min_length=1, max_length=300)
+    items           : Optional[List[PRODUCT_VARIANT_BULK_UPDATE_ITEM_SCHEMA]] = None
+    variant_ids     : Optional[List[uuid.UUID]]                               = None
+    cost_price      : Optional[Decimal]                                       = Field(default=None, ge=0)
+    selling_price   : Optional[Decimal]                                       = Field(default=None, gt=0)
+    wholesale_price : Optional[Decimal]                                       = Field(default=None, ge=0)
+    status_code     : Optional[str]                                           = None
 
 
 class PRODUCT_WITH_VARIANTS_SCHEMA(PRODUCT_RESPONSE_SCHEMA):
